@@ -1,0 +1,5 @@
+# Quick Start Configuration
+QUICK_START_MODEL="Qwen/Qwen2-0.5B"
+QUICK_START_DATASETS="librispeech fleurs"
+QUICK_START_STAGES="1 2"
+QUICK_START_MODE=true
