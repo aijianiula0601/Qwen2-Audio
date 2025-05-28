@@ -21,4 +21,5 @@ uvicorn>=0.23.0
 pydub>=0.25.1
 whisper-normalizer>=0.1.0
 sacrebleu>=2.3.0
-jiwer>=3.0.0 
+jiwer>=3.0.0
+deepspeed>=0.12.0 

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Qwen2-Audio Stage 1 Training Script
+# Qwen2-Audio Stage 1 Training Script with DeepSpeed
 # Pre-training with natural language prompts
 
 # Set environment variables
@@ -10,21 +10,22 @@ export MASTER_ADDR=localhost
 export MASTER_PORT=12345
 
 # Training parameters (will be updated by setup script)
-MODEL_NAME_OR_PATH="models/Qwen_Qwen2-0.5B"  # Base LLM model path
+MODEL_NAME_OR_PATH="models/Qwen_Qwen2-7B"  # Base LLM model path
 DATA_PATH="data/stage1_pretraining/train.jsonl"  # Pre-training data
-OUTPUT_DIR="checkpoints/qwen2-audio-stage1"
-BATCH_SIZE=8
-GRADIENT_ACCUMULATION_STEPS=2
-LEARNING_RATE=2e-4
+OUTPUT_DIR="checkpoints/qwen2-audio-stage1-deepspeed"
+BATCH_SIZE=4
+GRADIENT_ACCUMULATION_STEPS=4
+LEARNING_RATE=1e-4
 NUM_EPOCHS=3
 WARMUP_RATIO=0.03
 MAX_LENGTH=2048
+DEEPSPEED_CONFIG="configs/deepspeed_stage1.json"
 
 # Create output directory
 mkdir -p $OUTPUT_DIR
 
-# Launch distributed training
-torchrun --nproc_per_node=1
+# Launch DeepSpeed training
+deepspeed --num_gpus=4 \
     --master_port=$MASTER_PORT \
     src/trainer.py \
     --model_name_or_path $MODEL_NAME_OR_PATH \
@@ -41,8 +42,12 @@ torchrun --nproc_per_node=1
     --save_steps 500 \
     --save_total_limit 3 \
     --dataloader_num_workers 8 \
+    --deepspeed $DEEPSPEED_CONFIG \
     --fp16 \
-    --ddp_find_unused_parameters False \
     --report_to wandb \
-    --run_name "qwen2-audio-stage1" \
-    2>&1 | tee $OUTPUT_DIR/train.log 
+    --run_name "qwen2-audio-stage1-deepspeed" \
+    --remove_unused_columns False \
+    --ddp_find_unused_parameters False \
+    2>&1 | tee $OUTPUT_DIR/train.log
+
+echo "Stage 1 DeepSpeed training completed. Model saved to $OUTPUT_DIR" 

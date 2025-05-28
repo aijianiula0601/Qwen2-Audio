@@ -16,7 +16,8 @@ from transformers import (
     TrainingArguments,
     Trainer,
     get_linear_schedule_with_warmup,
-    get_cosine_schedule_with_warmup
+    get_cosine_schedule_with_warmup,
+    HfArgumentParser
 )
 from transformers.trainer_utils import seed_worker
 from typing import Dict, List, Optional, Union, Any
@@ -26,6 +27,17 @@ from dataclasses import dataclass, field
 import json
 from tqdm import tqdm
 import numpy as np
+import argparse
+import sys
+
+# DeepSpeed imports
+try:
+    import deepspeed
+    from deepspeed import zero
+    from deepspeed.runtime.zero.partition_parameters import ZeroParamStatus
+    _deepspeed_available = True
+except ImportError:
+    _deepspeed_available = False
 
 from .model import Qwen2AudioForConditionalGeneration, Qwen2AudioConfig
 from .processor import Qwen2AudioProcessor
@@ -447,41 +459,57 @@ def train_qwen2_audio(
 
 
 if __name__ == "__main__":
-    import argparse
+    # Parse arguments using HfArgumentParser for better integration with transformers
+    parser = HfArgumentParser((Qwen2AudioTrainingArguments,))
     
-    parser = argparse.ArgumentParser(description="Train Qwen2-Audio model")
-    parser.add_argument("--model_name_or_path", type=str, required=True)
-    parser.add_argument("--data_path", type=str, required=True)
-    parser.add_argument("--output_dir", type=str, required=True)
-    parser.add_argument("--training_stage", type=str, default="stage1", choices=["stage1", "stage2", "stage3"])
-    parser.add_argument("--num_train_epochs", type=int, default=3)
-    parser.add_argument("--per_device_train_batch_size", type=int, default=8)
-    parser.add_argument("--learning_rate", type=float, default=5e-5)
-    parser.add_argument("--warmup_ratio", type=float, default=0.03)
-    parser.add_argument("--freeze_audio_encoder", action="store_true")
-    parser.add_argument("--freeze_llm", action="store_true")
+    # Add custom arguments
+    parser.add_argument("--model_name_or_path", type=str, required=True, help="Path to pretrained model")
+    parser.add_argument("--data_path", type=str, required=True, help="Path to training data")
+    parser.add_argument("--stage", type=str, default="stage1", choices=["stage1", "stage2", "stage3"], 
+                       help="Training stage")
+    parser.add_argument("--max_seq_length", type=int, default=2048, help="Maximum sequence length")
     
-    args = parser.parse_args()
+    # Parse arguments
+    if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
+        # If we pass only one argument to the script and it's the path to a json file,
+        # let's parse it to get our arguments.
+        training_args, = parser.parse_json_file(json_file=os.path.abspath(sys.argv[1]))
+    else:
+        training_args, remaining_args = parser.parse_args_into_dataclasses(return_remaining_strings=True)
+        
+        # Parse remaining arguments
+        remaining_parser = argparse.ArgumentParser()
+        remaining_parser.add_argument("--model_name_or_path", type=str, required=True)
+        remaining_parser.add_argument("--data_path", type=str, required=True)
+        remaining_parser.add_argument("--stage", type=str, default="stage1")
+        remaining_parser.add_argument("--max_seq_length", type=int, default=2048)
+        
+        custom_args = remaining_parser.parse_args(remaining_args)
+        
+        # Update training_args with custom arguments
+        training_args.training_stage = custom_args.stage
     
-    training_args = Qwen2AudioTrainingArguments(
-        output_dir=args.output_dir,
-        training_stage=args.training_stage,
-        num_train_epochs=args.num_train_epochs,
-        per_device_train_batch_size=args.per_device_train_batch_size,
-        learning_rate=args.learning_rate,
-        warmup_ratio=args.warmup_ratio,
-        freeze_audio_encoder=args.freeze_audio_encoder,
-        freeze_llm=args.freeze_llm,
-        logging_steps=10,
-        save_steps=500,
-        save_total_limit=2,
-        dataloader_drop_last=True,
-        remove_unused_columns=False,
+    # Set up logging
+    logging.basicConfig(
+        format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+        datefmt="%m/%d/%Y %H:%M:%S",
+        level=logging.INFO,
     )
     
-    train_qwen2_audio(
-        model_name_or_path=args.model_name_or_path,
-        data_path=args.data_path,
-        output_dir=args.output_dir,
-        training_args=training_args
-    ) 
+    # Check DeepSpeed availability
+    if training_args.deepspeed and not _deepspeed_available:
+        raise ImportError("DeepSpeed is not available. Please install it with: pip install deepspeed")
+    
+    # Initialize processor
+    processor = Qwen2AudioProcessor()
+    
+    # Start training
+    trainer = train_qwen2_audio(
+        model_name_or_path=custom_args.model_name_or_path,
+        data_path=custom_args.data_path,
+        output_dir=training_args.output_dir,
+        training_args=training_args,
+        processor=processor
+    )
+    
+    logger.info(f"Training completed. Model saved to {training_args.output_dir}") 

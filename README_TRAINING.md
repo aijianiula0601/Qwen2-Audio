@@ -79,7 +79,65 @@ bash scripts/quick_start.sh
 - ⚡ **MoE高效**: 57B-A14B模型 + 完整数据集 (5-10天)
 - 🛠️ **自定义**: 完全自定义配置
 
-### 🔧 完整自定义 (高级用户)
+### 🚀 DeepSpeed训练 (推荐用于大模型)
+
+**DeepSpeed优势**:
+- 💾 **内存优化**: ZeRO技术节省50-80%显存
+- ⚡ **性能提升**: 混合精度训练提升20-40%速度
+- 🔧 **易于使用**: 无缝集成，自动配置
+
+#### 快速开始DeepSpeed训练
+```bash
+# 安装DeepSpeed
+pip install deepspeed>=0.12.0
+
+# Stage 1: 预训练
+bash scripts/train_deepspeed.sh \
+    --stage stage1 \
+    --model_path models/Qwen_Qwen2-7B \
+    --data_path data/stage1_pretraining/train.jsonl \
+    --output_dir checkpoints/qwen2-audio-stage1-deepspeed
+
+# Stage 2: 监督微调
+bash scripts/train_deepspeed.sh \
+    --stage stage2 \
+    --model_path checkpoints/qwen2-audio-stage1-deepspeed \
+    --data_path data/stage2_sft/train.jsonl \
+    --output_dir checkpoints/qwen2-audio-stage2-deepspeed
+
+# Stage 3: DPO优化
+bash scripts/train_deepspeed.sh \
+    --stage stage3 \
+    --model_path checkpoints/qwen2-audio-stage2-deepspeed \
+    --data_path data/stage3_dpo/train.jsonl \
+    --output_dir checkpoints/qwen2-audio-stage3-deepspeed \
+    --freeze_audio_encoder
+```
+
+#### DeepSpeed配置选项
+```bash
+# 自定义GPU数量和批大小
+bash scripts/train_deepspeed.sh \
+    --stage stage1 \
+    --model_path models/Qwen_Qwen2-7B \
+    --data_path data/stage1_pretraining/train.jsonl \
+    --output_dir checkpoints/stage1-custom \
+    --num_gpus 8 \
+    --batch_size 2 \
+    --gradient_accumulation 8
+
+# 使用自定义DeepSpeed配置文件
+bash scripts/train_deepspeed.sh \
+    --stage stage2 \
+    --model_path checkpoints/stage1 \
+    --data_path data/stage2_sft/train.jsonl \
+    --output_dir checkpoints/stage2-custom \
+    --deepspeed_config my_custom_deepspeed.json
+```
+
+**详细DeepSpeed指南**: 请参阅 [DEEPSPEED_TRAINING_GUIDE.md](DEEPSPEED_TRAINING_GUIDE.md)
+
+### 🔧 传统训练方式 (兼容性)
 ```bash
 # 完整配置流水线
 bash scripts/setup_and_train.sh
