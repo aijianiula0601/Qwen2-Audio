@@ -431,7 +431,7 @@ EOF
         sed -i "s/BATCH_SIZE=.*/BATCH_SIZE=$BATCH_SIZE/g" scripts/train_stage1.sh
         sed -i "s/GRADIENT_ACCUMULATION_STEPS=.*/GRADIENT_ACCUMULATION_STEPS=$GRADIENT_ACCUMULATION/g" scripts/train_stage1.sh
         sed -i "s/LEARNING_RATE=.*/LEARNING_RATE=$LEARNING_RATE_STAGE1/g" scripts/train_stage1.sh
-        sed -i "s/--nproc_per_node=.*/--nproc_per_node=$WORLD_SIZE/g" scripts/train_stage1.sh
+        sed -i "s/--nproc_per_node=[0-9]*/--nproc_per_node=$WORLD_SIZE/g" scripts/train_stage1.sh
         
         # 为大模型添加优化参数
         if [ "$USE_DEEPSPEED" = true ]; then
@@ -509,7 +509,7 @@ case $stage_choice in
         sed -i "s/BATCH_SIZE=.*/BATCH_SIZE=$STAGE2_BATCH_SIZE/g" scripts/train_stage2.sh
         sed -i "s/GRADIENT_ACCUMULATION_STEPS=.*/GRADIENT_ACCUMULATION_STEPS=$STAGE2_GRADIENT_ACCUMULATION/g" scripts/train_stage2.sh
         sed -i "s/LEARNING_RATE=.*/LEARNING_RATE=$LEARNING_RATE_STAGE2/g" scripts/train_stage2.sh
-        sed -i "s/--nproc_per_node=.*/--nproc_per_node=$WORLD_SIZE/g" scripts/train_stage2.sh
+        sed -i "s/--nproc_per_node=[0-9]*/--nproc_per_node=$WORLD_SIZE/g" scripts/train_stage2.sh
         
         # 为大模型配置DeepSpeed
         if [ "$USE_DEEPSPEED" = true ]; then
@@ -556,7 +556,7 @@ case $stage_choice in
         sed -i "s/BATCH_SIZE=.*/BATCH_SIZE=$STAGE3_BATCH_SIZE/g" scripts/train_stage3.sh
         sed -i "s/GRADIENT_ACCUMULATION_STEPS=.*/GRADIENT_ACCUMULATION_STEPS=$STAGE3_GRADIENT_ACCUMULATION/g" scripts/train_stage3.sh
         sed -i "s/LEARNING_RATE=.*/LEARNING_RATE=$LEARNING_RATE_STAGE3/g" scripts/train_stage3.sh
-        sed -i "s/--nproc_per_node=.*/--nproc_per_node=$WORLD_SIZE/g" scripts/train_stage3.sh
+        sed -i "s/--nproc_per_node=[0-9]*/--nproc_per_node=$WORLD_SIZE/g" scripts/train_stage3.sh
         
         # 为大模型配置DeepSpeed
         if [ "$USE_DEEPSPEED" = true ]; then

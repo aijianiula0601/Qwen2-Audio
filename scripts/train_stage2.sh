@@ -24,7 +24,7 @@ MAX_LENGTH=2048
 mkdir -p $OUTPUT_DIR
 
 # Launch distributed training
-torchrun --nproc_per_node=1
+torchrun --nproc_per_node=1 \
     --master_port=$MASTER_PORT \
     src/trainer.py \
     --model_name_or_path $MODEL_NAME_OR_PATH \
