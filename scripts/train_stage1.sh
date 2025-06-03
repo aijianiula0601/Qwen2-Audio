@@ -45,4 +45,7 @@ torchrun --nproc_per_node=1 \
     --ddp_find_unused_parameters False \
     --report_to wandb \
     --run_name "qwen2-audio-stage1" \
+    --tf32 False \
+    --bf16 False \
+    --no_tf32 \
     2>&1 | tee $OUTPUT_DIR/train.log 

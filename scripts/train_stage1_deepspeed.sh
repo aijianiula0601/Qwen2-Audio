@@ -10,7 +10,7 @@ export MASTER_ADDR=localhost
 export MASTER_PORT=12345
 
 # Training parameters (will be updated by setup script)
-MODEL_NAME_OR_PATH="models/Qwen_Qwen2-7B"  # Base LLM model path
+MODEL_NAME_OR_PATH="models/Qwen_Qwen2-0.5B"  # Base LLM model path
 DATA_PATH="data/stage1_pretraining/train.jsonl"  # Pre-training data
 OUTPUT_DIR="checkpoints/qwen2-audio-stage1-deepspeed"
 BATCH_SIZE=4

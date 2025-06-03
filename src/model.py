@@ -22,6 +22,7 @@ from transformers import (
     AutoConfig,
     AutoModel
 )
+from transformers import PretrainedConfig
 from transformers.modeling_outputs import CausalLMOutputWithPast
 from typing import Optional, List, Union, Tuple
 import logging
@@ -29,8 +30,10 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class Qwen2AudioConfig:
+class Qwen2AudioConfig(PretrainedConfig):
     """Configuration for Qwen2-Audio model"""
+    
+    model_type = "qwen2_audio"
     
     def __init__(
         self,
@@ -46,6 +49,7 @@ class Qwen2AudioConfig:
         audio_pooling_stride: int = 2,
         **kwargs
     ):
+        super().__init__(**kwargs)
         self.audio_encoder_model_name = audio_encoder_model_name
         self.llm_model_name = llm_model_name
         self.audio_hidden_size = audio_hidden_size
@@ -56,9 +60,6 @@ class Qwen2AudioConfig:
         self.hop_length = hop_length
         self.win_length = win_length
         self.audio_pooling_stride = audio_pooling_stride
-        
-        for key, value in kwargs.items():
-            setattr(self, key, value)
 
 
 class AudioEncoder(nn.Module):
@@ -68,10 +69,20 @@ class AudioEncoder(nn.Module):
         super().__init__()
         self.config = config
         
-        # Load Whisper encoder
+        # 加载 Whisper 编码器
+        print("Loading Whisper model...")
         self.whisper = WhisperModel.from_pretrained(
-            config.audio_encoder_model_name
+            config.audio_encoder_model_name,
+            device_map='auto'  # 自动选择设备
         ).encoder
+        
+        # 验证模型是否正确加载
+        print("Model parameters:", sum(p.numel() for p in self.whisper.parameters()))
+        print("Model device:", next(self.whisper.parameters()).device)
+        print("Model dtype:", next(self.whisper.parameters()).dtype)
+        
+        # 确保模型在正确的设备上
+        self.whisper = self.whisper.to(torch.float32)  # 确保使用 float32
         
         # Pooling layer to reduce sequence length
         self.pooling = nn.AvgPool1d(
@@ -92,19 +103,35 @@ class AudioEncoder(nn.Module):
         Returns:
             audio_embeddings: [batch_size, seq_len//stride, llm_hidden_size]
         """
-        # Whisper expects [batch_size, n_mels, seq_len]
+        # 1. 检查输入
+        print("1. Input audio_features stats:")
+        print(f"   shape: {audio_features.shape}")
+        print(f"   min/max: {audio_features.min().item()}, {audio_features.max().item()}")
+        print(f"   mean/std: {audio_features.mean().item()}, {audio_features.std().item()}")
+        
+        # 2. Whisper 编码器处理
         encoder_outputs = self.whisper(audio_features)
         audio_embeddings = encoder_outputs.last_hidden_state
+        print("2. After Whisper encoder:")
+        print(f"   shape: {audio_embeddings.shape}")
+        print(f"   min/max: {audio_embeddings.min().item()}, {audio_embeddings.max().item()}")
+        print(f"   mean/std: {audio_embeddings.mean().item()}, {audio_embeddings.std().item()}")
         
-        # Apply pooling to reduce sequence length
-        # [batch_size, seq_len, hidden_size] -> [batch_size, hidden_size, seq_len]
+        # 3. 池化层处理
         audio_embeddings = audio_embeddings.transpose(1, 2)
         pooled_embeddings = self.pooling(audio_embeddings)
-        # [batch_size, hidden_size, seq_len//stride] -> [batch_size, seq_len//stride, hidden_size]
         pooled_embeddings = pooled_embeddings.transpose(1, 2)
+        print("3. After pooling:")
+        print(f"   shape: {pooled_embeddings.shape}")
+        print(f"   min/max: {pooled_embeddings.min().item()}, {pooled_embeddings.max().item()}")
+        print(f"   mean/std: {pooled_embeddings.mean().item()}, {pooled_embeddings.std().item()}")
         
-        # Project to LLM hidden size
+        # 4. 投影层处理
         projected_embeddings = self.audio_projection(pooled_embeddings)
+        print("4. After projection:")
+        print(f"   shape: {projected_embeddings.shape}")
+        print(f"   min/max: {projected_embeddings.min().item()}, {projected_embeddings.max().item()}")
+        print(f"   mean/std: {projected_embeddings.mean().item()}, {projected_embeddings.std().item()}")
         
         return projected_embeddings
 
@@ -117,41 +144,46 @@ class Qwen2AudioForConditionalGeneration(PreTrainedModel):
     for audio-language understanding and generation tasks.
     """
     
+    config_class = Qwen2AudioConfig
+    base_model_prefix = "qwen2_audio"
+    
     def __init__(self, config: Qwen2AudioConfig):
         super().__init__(config)
         self.config = config
-        
         # Initialize audio encoder
         self.audio_encoder = AudioEncoder(config)
-        
         # Initialize language model
         self.language_model = Qwen2ForCausalLM.from_pretrained(
             config.llm_model_name
         )
-        
+
         # Special tokens for audio
-        self.audio_start_token_id = None
-        self.audio_end_token_id = None
-        self.audio_token_id = None
+        self.audio_start_token_id = 151646
+        self.audio_end_token_id = 151647
+        self.audio_token_id = 151648
         
-        # Initialize special tokens
-        self._init_special_tokens()
+    def update_special_tokens(self, tokenizer):
+        """Update special token IDs from tokenizer
         
-    def _init_special_tokens(self):
-        """Initialize special tokens for audio input"""
-        tokenizer = self.language_model.config.tokenizer if hasattr(self.language_model.config, 'tokenizer') else None
+        Args:
+            tokenizer: The tokenizer instance with special tokens added
+        """
+        self.audio_start_token_id = tokenizer.convert_tokens_to_ids("<|audio_bos|>")
+        self.audio_end_token_id = tokenizer.convert_tokens_to_ids("<|audio_eos|>")
+        self.audio_token_id = tokenizer.convert_tokens_to_ids("<|AUDIO|>")
         
-        # Add special tokens if they don't exist
-        special_tokens = {
-            '<|audio_bos|>': 'audio_start_token_id',
-            '<|audio_eos|>': 'audio_end_token_id', 
-            '<|AUDIO|>': 'audio_token_id'
-        }
+        print(f"✅ Updated special token IDs from tokenizer:")
+        print(f"  audio_start_token_id: {self.audio_start_token_id}")
+        print(f"  audio_end_token_id: {self.audio_end_token_id}")
+        print(f"  audio_token_id: {self.audio_token_id}")
         
-        # For now, use placeholder token IDs
-        self.audio_start_token_id = 151643  # placeholder
-        self.audio_end_token_id = 151644    # placeholder
-        self.audio_token_id = 151645        # placeholder
+        # Validate that tokens were found
+        if self.audio_token_id == tokenizer.unk_token_id:
+            print("⚠️  Warning: <|AUDIO|> token not found in tokenizer vocabulary!")
+        if self.audio_start_token_id == tokenizer.unk_token_id:
+            print("⚠️  Warning: <|audio_bos|> token not found in tokenizer vocabulary!")
+        if self.audio_end_token_id == tokenizer.unk_token_id:
+            print("⚠️  Warning: <|audio_eos|> token not found in tokenizer vocabulary!")
         
     def prepare_inputs_for_generation(
         self,
@@ -187,32 +219,54 @@ class Qwen2AudioForConditionalGeneration(PreTrainedModel):
         Returns:
             CausalLMOutputWithPast with loss, logits, etc.
         """
-        batch_size, seq_len = input_ids.shape
         
-        # Get text embeddings from language model
-        text_embeddings = self.language_model.model.embed_tokens(input_ids)
+        # Get combined embeddings using the same logic as generation
+        inputs_embeds = self._get_embeddings_for_generation(input_ids, audio_features)
         
-        # Process audio if provided
+        # Create position IDs for the combined sequence
+        position_ids = torch.arange(inputs_embeds.shape[1], device=inputs_embeds.device).unsqueeze(0)
+        
+        # Update attention mask and labels for the combined sequence if audio is present
         if audio_features is not None:
-            audio_embeddings = self.audio_encoder(audio_features)
-            
-            # Find audio token positions in input_ids
+            # Find the position of audio token
             audio_token_positions = (input_ids == self.audio_token_id).nonzero(as_tuple=True)
-            
             if len(audio_token_positions[0]) > 0:
-                # Replace audio tokens with audio embeddings
-                for i, (batch_idx, seq_idx) in enumerate(zip(*audio_token_positions)):
-                    if i < audio_embeddings.shape[1]:  # Ensure we don't exceed audio sequence length
-                        text_embeddings[batch_idx, seq_idx] = audio_embeddings[batch_idx, i]
+                insert_pos = audio_token_positions[1][0] + 1  # +1 to insert after the audio token
+                audio_seq_len = self.audio_encoder(audio_features).shape[1]
+                total_seq_len = input_ids.shape[1] + audio_seq_len
+                
+                # Create new attention mask
+                if attention_mask is None:
+                    attention_mask = torch.ones_like(input_ids)
+                new_attention_mask = torch.zeros(
+                    (input_ids.shape[0], total_seq_len),
+                    device=attention_mask.device
+                )
+                new_attention_mask[:, :insert_pos] = attention_mask[:, :insert_pos]
+                new_attention_mask[:, insert_pos:insert_pos + audio_seq_len] = 1
+                new_attention_mask[:, insert_pos + audio_seq_len:] = attention_mask[:, insert_pos:]
+                attention_mask = new_attention_mask
+                
+                # Update labels if provided
+                if labels is not None:
+                    new_labels = torch.full(
+                        (input_ids.shape[0], total_seq_len),
+                        -100,
+                        device=labels.device
+                    )
+                    new_labels[:, :insert_pos] = labels[:, :insert_pos]
+                    new_labels[:, insert_pos + audio_seq_len:] = labels[:, insert_pos:]
+                    labels = new_labels
         
-        # Create combined attention mask
+        # If no audio features, use original attention mask
         if attention_mask is None:
             attention_mask = torch.ones_like(input_ids)
             
         # Forward through language model
         outputs = self.language_model(
-            inputs_embeds=text_embeddings,
+            inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,
+            position_ids=position_ids,
             labels=labels,
             **kwargs
         )
@@ -228,33 +282,20 @@ class Qwen2AudioForConditionalGeneration(PreTrainedModel):
     ):
         """Generate text given audio and text inputs"""
         
-        # Prepare inputs
-        model_inputs = self.prepare_inputs_for_generation(
-            input_ids=input_ids,
-            audio_features=audio_features,
+        # Get the initial embeddings that combine text and audio
+        inputs_embeds = self._get_embeddings_for_generation(input_ids, audio_features)
+        
+        # Create position IDs for the combined sequence
+        position_ids = torch.arange(inputs_embeds.shape[1], device=inputs_embeds.device).unsqueeze(0)
+        # Use the language model's generate method directly with inputs_embeds
+        # No need to replace the forward method
+        generated_ids = self.language_model.generate(
+            inputs_embeds=inputs_embeds,
+            position_ids=position_ids,
+            max_length=max_length,
             **kwargs
         )
         
-        # Use language model's generate method with custom forward
-        def custom_forward(**model_kwargs):
-            return self.forward(**model_kwargs)
-            
-        # Temporarily replace forward method
-        original_forward = self.language_model.forward
-        self.language_model.forward = custom_forward
-        
-        try:
-            generated_ids = self.language_model.generate(
-                inputs_embeds=self._get_embeddings_for_generation(
-                    input_ids, audio_features
-                ),
-                max_length=max_length,
-                **kwargs
-            )
-        finally:
-            # Restore original forward method
-            self.language_model.forward = original_forward
-            
         return generated_ids
     
     def _get_embeddings_for_generation(
@@ -262,20 +303,58 @@ class Qwen2AudioForConditionalGeneration(PreTrainedModel):
         input_ids: torch.Tensor, 
         audio_features: Optional[torch.Tensor] = None
     ):
-        """Get embeddings for generation"""
+        """Get embeddings for generation by properly aligning audio and text features
+        
+        Args:
+            input_ids: [batch_size, seq_len] - Text token IDs
+            audio_features: [batch_size, n_mels, audio_seq_len] - Audio mel spectrograms
+            
+        Returns:
+            combined_embeddings: [batch_size, total_seq_len, hidden_size] - Combined audio and text embeddings
+        """
+
+        # 检查输入
+        if torch.isnan(input_ids).any():
+            raise ValueError("input_ids contains NaN values")
+        if audio_features is not None and torch.isnan(audio_features).any():
+            raise ValueError("audio_features contains NaN values")
+    
+
+        # Get text embeddings
         text_embeddings = self.language_model.model.embed_tokens(input_ids)
         
         if audio_features is not None:
-            audio_embeddings = self.audio_encoder(audio_features)
+            # Get audio embeddings
+            audio_embeddings = self.audio_encoder(audio_features)  # [batch_size, audio_seq_len, hidden_size]
+            # Find the position of audio start token
+            audio_start_positions = (input_ids == self.audio_token_id).nonzero(as_tuple=True)
             
-            # Find audio token positions
-            audio_token_positions = (input_ids == self.audio_token_id).nonzero(as_tuple=True)
-            
-            if len(audio_token_positions[0]) > 0:
-                for i, (batch_idx, seq_idx) in enumerate(zip(*audio_token_positions)):
-                    if i < audio_embeddings.shape[1]:
-                        text_embeddings[batch_idx, seq_idx] = audio_embeddings[batch_idx, i]
-        
+            if len(audio_start_positions[0]) > 0:
+                # Get the position where audio should be inserted
+                insert_pos = audio_start_positions[1][0] + 1  # +1 to insert after the start token
+                
+                # Create a new tensor to hold combined embeddings
+                batch_size, text_seq_len, hidden_size = text_embeddings.shape
+                audio_seq_len = audio_embeddings.shape[1]
+                total_seq_len = text_seq_len + audio_seq_len
+                
+                # Create combined embeddings
+                combined_embeddings = torch.zeros(
+                    (batch_size, total_seq_len, hidden_size),
+                    device=text_embeddings.device
+                )
+                
+                # Copy text embeddings before audio
+                combined_embeddings[:, :insert_pos] = text_embeddings[:, :insert_pos]
+                
+                # Insert audio embeddings
+                combined_embeddings[:, insert_pos:insert_pos + audio_seq_len] = audio_embeddings
+                
+                # Copy remaining text embeddings
+                combined_embeddings[:, insert_pos + audio_seq_len:] = text_embeddings[:, insert_pos:]
+                
+                return combined_embeddings
+
         return text_embeddings
 
 

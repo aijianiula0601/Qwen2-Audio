@@ -1,3 +1,6 @@
 data/*
 *.log
 checkpoints/*
+*.pyc
+models/*
+*.jsonl

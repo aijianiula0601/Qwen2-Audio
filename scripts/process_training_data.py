@@ -23,12 +23,14 @@ import json
 import random
 import argparse
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple
 import librosa
 import soundfile as sf
 from datasets import load_from_disk, Dataset
 from tqdm import tqdm
 import pandas as pd
+import multiprocessing as mp
+from functools import partial
 
 
 class DataProcessor:
@@ -42,6 +44,52 @@ class DataProcessor:
         self.target_sr = 16000
         self.max_duration = 30.0  # 最大30秒
         
+    def process_audio_file(self, audio_info: Tuple[Path, str, str, str]) -> Optional[Dict]:
+        """处理单个音频文件
+        
+        Args:
+            audio_info: (音频文件路径, 转录文本, 子集名称, 指令)
+            
+        Returns:
+            处理后的数据样本或None（如果处理失败）
+        """
+        audio_file, transcription, subset, instruction = audio_info
+        
+        try:
+            # 检查音频时长
+            duration = librosa.get_duration(path=str(audio_file))
+            if duration > self.max_duration:
+                return None
+                
+            # 处理音频文件
+            output_dir = self.processed_dir / "librispeech" / subset
+            output_dir.mkdir(parents=True, exist_ok=True)
+            output_path = output_dir / f"{audio_file.stem}.wav"
+            
+            # 如果输出文件已存在，跳过处理
+            if output_path.exists():
+                return None
+                
+            # 加载并重采样音频
+            audio, sr = librosa.load(str(audio_file), sr=self.target_sr)
+            
+            # 保存处理后的音频
+            sf.write(str(output_path), audio, self.target_sr)
+            
+            # 创建数据样本
+            return {
+                "audio_path": str(output_path.relative_to(self.data_root)),
+                "instruction": instruction,
+                "input": "",
+                "output": transcription,
+                "task_type": "asr",
+                "language": "en"
+            }
+            
+        except Exception as e:
+            print(f"处理音频 {audio_file} 时出错: {e}")
+            return None
+
     def process_librispeech(self) -> List[Dict]:
         """处理LibriSpeech ASR数据"""
         print("处理LibriSpeech数据...")
@@ -50,10 +98,11 @@ class DataProcessor:
         librispeech_dir = self.raw_dir / "librispeech"
         if not librispeech_dir.exists():
             print("LibriSpeech目录不存在，跳过")
+            
             return data_samples
             
-        # 解压并处理LibriSpeech数据
-        # 这里需要根据实际解压后的目录结构调整
+        # 处理所有子集
+        subsets = ["train-clean-100", "train-clean-360", "train-other-500"]
         instructions = [
             "请转录这段英文音频",
             "将这段音频转换为文字",
@@ -61,18 +110,73 @@ class DataProcessor:
             "请识别音频中的语音内容"
         ]
         
-        # 示例数据结构 - 实际需要解析LibriSpeech的trans.txt文件
-        for i in range(100):  # 示例生成100条数据
-            sample = {
-                "audio_path": f"data/processed/librispeech/audio_{i:06d}.wav",
-                "instruction": random.choice(instructions),
-                "input": "",
-                "output": f"This is sample transcription {i}",
-                "task_type": "asr",
-                "language": "en"
-            }
-            data_samples.append(sample)
+        # 收集所有需要处理的音频文件信息
+        audio_files_to_process = []
+        
+        for subset in subsets:
+            subset_dir = librispeech_dir / subset
+            if not subset_dir.exists():
+                print(f"子集 {subset} 不存在，跳过")
+                continue
+                
+            print(f"收集子集 {subset} 的音频文件信息..., sub_dir:{subset_dir}")
             
+            # 遍历所有说话人目录
+            for speaker_dir in tqdm(list(subset_dir.iterdir()), desc=f"扫描 {subset} 说话人"):
+                if not speaker_dir.is_dir():
+                    continue
+                
+                # 遍历所有章节目录
+                for chapter_dir in speaker_dir.iterdir():
+                    if not chapter_dir.is_dir():
+                        continue
+                    # 读取转录文件
+                    trans_files = list(chapter_dir.glob("*.trans.txt"))
+                    if len(trans_files) != 1:
+                        continue
+                    trans_file = trans_files[0]
+                    if not trans_file.exists():
+                        continue
+                        
+                    # 解析转录文件
+                    with open(trans_file, 'r', encoding='utf-8') as f:
+                        for line in f:
+                            
+                            parts = line.strip().split(' ', 1)
+                            if len(parts) != 2:
+                                continue
+                                
+                            audio_id, transcription = parts
+                            audio_file = chapter_dir / f"{audio_id}.flac"
+                            
+                            if not audio_file.exists():
+                                continue
+                                
+                            audio_files_to_process.append((
+                                audio_file,
+                                transcription,
+                                subset,
+                                random.choice(instructions)
+                            ))
+        
+        print(f"共收集到 {len(audio_files_to_process)} 个音频文件待处理")
+        
+        # 使用多进程处理音频文件
+        num_processes = max(1, mp.cpu_count() - 1)  # 保留一个CPU核心
+        print(f"使用 {num_processes} 个进程进行处理")
+        
+        with mp.Pool(num_processes) as pool:
+            # 使用tqdm显示进度
+            results = list(tqdm(
+                pool.imap(self.process_audio_file, audio_files_to_process),
+                total=len(audio_files_to_process),
+                desc="处理音频文件"
+            ))
+            
+        # 收集处理结果
+        data_samples = [r for r in results if r is not None]
+        
+        print(f"LibriSpeech处理完成，共处理 {len(data_samples)} 条数据")
         return data_samples
     
     def process_fleurs(self) -> List[Dict]:

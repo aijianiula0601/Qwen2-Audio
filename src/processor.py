@@ -68,10 +68,34 @@ class Qwen2AudioProcessor:
             ]
         }
         
-        # Add tokens if they don't exist
-        num_added = self.tokenizer.add_special_tokens(special_tokens)
-        if num_added > 0:
-            print(f"Added {num_added} special tokens")
+        # Check if tokens already exist to avoid duplicates
+        existing_tokens = set(self.tokenizer.get_vocab().keys())
+        tokens_to_add = []
+        
+        for token in special_tokens["additional_special_tokens"]:
+            if token not in existing_tokens:
+                tokens_to_add.append(token)
+        
+        if tokens_to_add:
+            # Only add tokens that don't exist
+            special_tokens_dict = {"additional_special_tokens": tokens_to_add}
+            num_added = self.tokenizer.add_special_tokens(special_tokens_dict)
+            
+            if num_added > 0:
+                print(f"Successfully added {num_added} special tokens: {tokens_to_add}")
+            else:
+                print("No tokens were added (they may already exist)")
+            # Store token IDs for easy access
+            self.audio_bos_token_id = self.tokenizer.convert_tokens_to_ids("<|audio_bos|>")
+            self.audio_eos_token_id = self.tokenizer.convert_tokens_to_ids("<|audio_eos|>")
+            self.audio_token_id = self.tokenizer.convert_tokens_to_ids("<|AUDIO|>")
+            
+        else:
+            print("All special tokens already exist in tokenizer vocabulary")
+            # Still store token IDs even if tokens weren't added
+            self.audio_bos_token_id = self.tokenizer.convert_tokens_to_ids("<|audio_bos|>")
+            self.audio_eos_token_id = self.tokenizer.convert_tokens_to_ids("<|audio_eos|>")
+            self.audio_token_id = self.tokenizer.convert_tokens_to_ids("<|AUDIO|>")
     
     def load_audio(self, audio_path: str) -> np.ndarray:
         """
@@ -221,6 +245,7 @@ class Qwen2AudioProcessor:
             Dictionary with processed inputs
         """
         outputs = {}
+
         
         # Process text
         if text is not None:
@@ -245,7 +270,13 @@ class Qwen2AudioProcessor:
             for audio in audios:
                 features = self.process_audio(audio)
                 audio_features.append(features)
-            
+
+            print("--------------------------------audios--------------------------------")
+            print(audios)
+            for audio_feature in audio_features:
+                print(audio_feature.shape)
+            print("----------------------------------------------------------------------------")
+                
             # Stack audio features
             if audio_features:
                 outputs["audio_features"] = torch.stack(audio_features)

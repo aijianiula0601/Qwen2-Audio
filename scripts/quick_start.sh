@@ -124,6 +124,9 @@ EOF
 
 echo "✅ 开始快速训练流程..."
 
+# 添加项目根目录到 Python 路径
+export PYTHONPATH=$PYTHONPATH:$(pwd)
+
 # 修改setup_and_train.sh以支持快速启动
 export QUICK_START_MODE=true
 bash scripts/setup_and_train.sh

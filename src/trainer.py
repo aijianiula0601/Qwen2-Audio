@@ -39,8 +39,8 @@ try:
 except ImportError:
     _deepspeed_available = False
 
-from .model import Qwen2AudioForConditionalGeneration, Qwen2AudioConfig
-from .processor import Qwen2AudioProcessor
+from src.model import Qwen2AudioForConditionalGeneration, Qwen2AudioConfig
+from src.processor import Qwen2AudioProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -117,8 +117,13 @@ class Qwen2AudioDataset(torch.utils.data.Dataset):
     
     def _process_stage1(self, example):
         """Process data for Stage 1: Pre-training with natural language prompts"""
-        audio_path = example.get('audio', None)
-        text = example['text']
+        audio_path = example.get('audio_path', None)
+        instruction = example.get('instruction', '')
+        input_text = example.get('input', '')
+        output_text = example.get('output', '')
+        
+        # Combine instruction, input and output into a single text
+        text = f"{instruction}\n{input_text}\n{output_text}".strip()
         
         # Process audio if available
         audio_features = None
@@ -354,6 +359,12 @@ class Qwen2AudioTrainer(Trainer):
         # Sum over sequence length
         return per_token_logps.sum(dim=-1)
 
+    def _wrap_model(self, model):
+        """Wrap model for training"""
+        if self.accelerator.unwrap_model(model) is not model:
+            return model
+        return self.accelerator.prepare(model)
+
 
 def create_data_collator(processor: Qwen2AudioProcessor, stage: str = "stage1"):
     """Create data collator for training"""
@@ -475,19 +486,24 @@ if __name__ == "__main__":
         # let's parse it to get our arguments.
         training_args, = parser.parse_json_file(json_file=os.path.abspath(sys.argv[1]))
     else:
-        training_args, remaining_args = parser.parse_args_into_dataclasses(return_remaining_strings=True)
+        # Parse all arguments into a single dataclass
+        training_args = parser.parse_args_into_dataclasses()[0]
         
-        # Parse remaining arguments
-        remaining_parser = argparse.ArgumentParser()
-        remaining_parser.add_argument("--model_name_or_path", type=str, required=True)
-        remaining_parser.add_argument("--data_path", type=str, required=True)
-        remaining_parser.add_argument("--stage", type=str, default="stage1")
-        remaining_parser.add_argument("--max_seq_length", type=int, default=2048)
+        # Get model_name_or_path and data_path from sys.argv
+        model_name_or_path = None
+        data_path = None
+        for i, arg in enumerate(sys.argv):
+            if arg == "--model_name_or_path" and i + 1 < len(sys.argv):
+                model_name_or_path = sys.argv[i + 1]
+            elif arg == "--data_path" and i + 1 < len(sys.argv):
+                data_path = sys.argv[i + 1]
         
-        custom_args = remaining_parser.parse_args(remaining_args)
+        if not model_name_or_path or not data_path:
+            raise ValueError("Both --model_name_or_path and --data_path must be provided")
         
         # Update training_args with custom arguments
-        training_args.training_stage = custom_args.stage
+        training_args.model_name_or_path = model_name_or_path
+        training_args.data_path = data_path
     
     # Set up logging
     logging.basicConfig(
@@ -505,8 +521,8 @@ if __name__ == "__main__":
     
     # Start training
     trainer = train_qwen2_audio(
-        model_name_or_path=custom_args.model_name_or_path,
-        data_path=custom_args.data_path,
+        model_name_or_path=training_args.model_name_or_path,
+        data_path=training_args.data_path,
         output_dir=training_args.output_dir,
         training_args=training_args,
         processor=processor

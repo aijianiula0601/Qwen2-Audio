@@ -44,13 +44,16 @@ torchrun --nproc_per_node=1 \
     --evaluation_strategy steps \
     --eval_steps 100 \
     --dataloader_drop_last True \
-    --bf16 True \
-    --tf32 True \
+    --dataloader_num_workers 8 \
+    --fp16 \
     --ddp_find_unused_parameters False \
-    --gradient_checkpointing True \
     --report_to wandb \
-    --run_name "qwen2-audio-stage3-$(date +%Y%m%d-%H%M%S)" \
+    --run_name "qwen2-audio-stage3" \
+    --tf32 False \
+    --bf16 False \
+    --no_tf32 \
     --freeze_audio_encoder True \
-    --freeze_llm False
+    --freeze_llm False \
+    2>&1 | tee $OUTPUT_DIR/train.log
 
 echo "Stage 3 training completed. Model saved to $OUTPUT_DIR" 
