@@ -34,26 +34,26 @@ config = Qwen2AudioConfig(
     freeze_llm=True  # 加快测试
     # 
 )
-model = Qwen2AudioModel(config)
+model = Qwen2AudioModel(config).cuda()
 model.eval()
 
 # 随机生成input_ids（包含audio_bos和audio_eos）
 tokenizer = model.tokenizer
 bos = tokenizer.convert_tokens_to_ids(config.audio_start_token)
 eos = tokenizer.convert_tokens_to_ids(config.audio_end_token)
-input_ids = torch.randint(0, tokenizer.vocab_size, (batch_size, text_len))
+input_ids = torch.randint(0, tokenizer.vocab_size, (batch_size, text_len)).cuda()
 input_ids[:, 4] = bos
 input_ids[:, 5] = eos  # 让eos紧跟在bos后面
 
 # attention_mask
-attention_mask = torch.ones_like(input_ids)
+attention_mask = torch.ones_like(input_ids).cuda()
 
 # labels
 labels = input_ids.clone()
 
 # 随机生成audio_features
 # Whisper期望的输入shape为[batch, 128, 3000]，其中128是mel特征维度
-audio_features = torch.randn(batch_size,128, whisper_input_length, dtype=config.dtype)
+audio_features = torch.randn(batch_size,128, whisper_input_length, dtype=config.dtype).cuda()
 
 # forward
 with torch.no_grad():
