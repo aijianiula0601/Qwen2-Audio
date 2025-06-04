@@ -1,0 +1,27 @@
+# Qwen2-70B specific configuration
+model:
+  llm_backbone:
+    model_name: "Qwen/Qwen2-70B"
+    model_type: "qwen2"
+    hidden_size: 8192
+    num_attention_heads: 64
+    num_hidden_layers: 80
+    vocab_size: 151936
+    max_position_embeddings: 131072
+    
+  # Audio projector adapted for Qwen2-70B
+  audio_projector:
+    input_size: 1280  # Whisper-large-v3 feature size
+    hidden_size: 8192  # Match Qwen2-70B hidden size
+    intermediate_size: 32768
+    num_layers: 3  # More layers for larger model
+    
+training:
+  hyperparameters:
+    per_device_train_batch_size: 1  # Very small for 70B model
+    gradient_accumulation_steps: 16
+    learning_rate: 5e-6  # Lower learning rate for larger model
+    
+# DeepSpeed configuration for 70B model
+deepspeed:
+  config_file: "configs/deepspeed_70b_config.json" 

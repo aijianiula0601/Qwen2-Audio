@@ -295,3 +295,412 @@ If you find our paper and code useful in your research, please consider giving a
 
 If you are interested to leave a message to either our research team or product team, feel free to send an email to `qianwen_opensource@alibabacloud.com`.
 
+# Qwen2-Audio Implementation
+
+A complete implementation of Qwen2-Audio: Large Language Model for Audio Understanding and Generation, supporting multiple LLM backbones and DeepSpeed training.
+
+## 🚀 Features
+
+- **Multi-Model Support**: Qwen2-7B/70B, LLaMA3-8B, and extensible to other LLMs
+- **Three-Stage Training**: Pretraining, Supervised Fine-tuning (SFT), and Direct Preference Optimization (DPO)
+- **DeepSpeed Integration**: Optimized for large-scale training with ZeRO optimization
+- **Flexible Data Pipeline**: Support for Common Voice, LibriSpeech, and custom datasets
+- **Comprehensive Evaluation**: Built-in evaluation suite for multiple audio tasks
+- **Production Ready**: Complete training pipeline with monitoring and checkpointing
+
+## 📋 Requirements
+
+### System Requirements
+- Python 3.8+
+- CUDA 11.8+ (for GPU training)
+- 8+ GPUs recommended for 7B models
+- 16+ GPUs recommended for 70B models
+
+### Installation
+
+```bash
+# Clone the repository
+git clone <this-repo>
+cd Qwen2-Audio
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Install additional dependencies for evaluation
+pip install jiwer sacrebleu
+```
+
+## 🗂 Project Structure
+
+```
+Qwen2-Audio/
+├── configs/                    # Configuration files
+│   ├── base_config.yaml       # Base training configuration
+│   ├── deepspeed_config.json  # DeepSpeed optimization config
+│   ├── deepspeed_70b_config.json  # Enhanced config for 70B models
+│   └── models/                # Model-specific configurations
+│       ├── qwen2_7b.yaml
+│       ├── qwen2_70b.yaml
+│       └── llama3_8b.yaml
+├── training/                  # Core training modules
+│   ├── model.py              # Qwen2-Audio model implementation
+│   ├── dataset.py            # Dataset and data loading
+│   ├── train.py              # Main training script
+│   └── dpo_trainer.py        # DPO training implementation
+├── scripts/                   # Shell scripts
+│   ├── download_data.sh      # Data download and preparation
+│   ├── train_pretrain.sh     # Pretraining stage
+│   ├── train_sft.sh          # SFT stage
+│   ├── train_dpo.sh          # DPO stage
+│   └── train_full_pipeline.sh # Complete training pipeline
+├── demo/                      # Inference and demo
+│   └── inference.py          # Interactive inference script
+├── evaluation/                # Evaluation tools
+│   └── evaluate.py           # Model evaluation script
+├── tools/                     # Utility tools
+│   └── data_converter.py     # Dataset conversion utilities
+└── outputs/                   # Training outputs and checkpoints
+```
+
+## 🚀 Quick Start
+
+### 1. Data Preparation
+
+Download and prepare training data:
+
+```bash
+# Download sample datasets (Common Voice, LibriSpeech)
+bash scripts/download_data.sh
+
+# Or convert your custom dataset
+python tools/data_converter.py --dataset custom --data_dir /path/to/your/data
+```
+
+### 2. Training
+
+#### Option A: Complete Pipeline (Recommended)
+
+Run all three stages automatically:
+
+```bash
+# Train Qwen2-7B with default settings
+bash scripts/train_full_pipeline.sh --model qwen2_7b --gpus 8
+
+# Train Qwen2-70B (requires more resources)
+bash scripts/train_full_pipeline.sh --model qwen2_70b --gpus 16
+
+# Train LLaMA3-8B
+bash scripts/train_full_pipeline.sh --model llama3_8b --gpus 8
+
+# Train only specific stages
+bash scripts/train_full_pipeline.sh --model qwen2_7b --pretrain-only
+bash scripts/train_full_pipeline.sh --model qwen2_7b --sft-only --skip-pretrain
+bash scripts/train_full_pipeline.sh --model qwen2_7b --dpo-only --skip-pretrain --skip-sft
+```
+
+#### Option B: Individual Stages
+
+Run training stages separately:
+
+```bash
+# Stage 1: Pretraining
+bash scripts/train_pretrain.sh --model qwen2_7b --gpus 8
+
+# Stage 2: Supervised Fine-tuning
+bash scripts/train_sft.sh --model qwen2_7b --gpus 8 --pretrain_checkpoint outputs/pretrain_qwen2_7b_*/pytorch_model.bin
+
+# Stage 3: Direct Preference Optimization
+bash scripts/train_dpo.sh --model qwen2_7b --gpus 8 --sft_checkpoint outputs/sft_qwen2_7b_*/pytorch_model.bin
+```
+
+#### Option C: Python Training Script
+
+Use the Python training script directly:
+
+```bash
+# Pretraining
+python training/train.py \
+    --config configs/base_config.yaml \
+    --model_config configs/models/qwen2_7b.yaml \
+    --stage pretrain \
+    --output_dir outputs/pretrain_qwen2_7b
+
+# SFT
+python training/train.py \
+    --config configs/base_config.yaml \
+    --model_config configs/models/qwen2_7b.yaml \
+    --stage sft \
+    --pretrain_checkpoint outputs/pretrain_qwen2_7b/pytorch_model.bin \
+    --output_dir outputs/sft_qwen2_7b
+
+# DPO
+python training/train.py \
+    --config configs/base_config.yaml \
+    --model_config configs/models/qwen2_7b.yaml \
+    --stage dpo \
+    --sft_checkpoint outputs/sft_qwen2_7b/pytorch_model.bin \
+    --output_dir outputs/dpo_qwen2_7b
+```
+
+### 3. Inference
+
+Test your trained model:
+
+```bash
+# Interactive mode
+python demo/inference.py --model_path outputs/dpo_qwen2_7b_* --interactive
+
+# Single audio transcription
+python demo/inference.py \
+    --model_path outputs/dpo_qwen2_7b_* \
+    --audio_path your_audio.wav \
+    --mode transcribe
+
+# Audio chat
+python demo/inference.py \
+    --model_path outputs/dpo_qwen2_7b_* \
+    --audio_path your_audio.wav \
+    --mode chat \
+    --instruction "What do you hear in this audio?"
+
+# Audio analysis
+python demo/inference.py \
+    --model_path outputs/dpo_qwen2_7b_* \
+    --audio_path your_audio.wav \
+    --mode analyze
+```
+
+### 4. Evaluation
+
+Evaluate your model on standard benchmarks:
+
+```bash
+# Prepare test data (create test_data.json with your evaluation samples)
+python evaluation/evaluate.py \
+    --model_path outputs/dpo_qwen2_7b_* \
+    --test_data test_data.json \
+    --tasks transcription qa classification generation \
+    --output_dir evaluation_results \
+    --save_predictions
+```
+
+## ⚙️ Configuration
+
+### Model Configuration
+
+Edit `configs/models/` files to customize model parameters:
+
+- `llm_name`: Base LLM model path
+- `audio_projector_config`: Projector architecture settings
+- `freeze_audio_encoder`: Whether to freeze the audio encoder
+- `freeze_llm`: Whether to freeze the LLM backbone
+
+### Training Configuration
+
+Edit `configs/base_config.yaml` to customize training:
+
+- `training.batch_size`: Training batch size
+- `training.learning_rate`: Learning rate settings
+- `training.num_epochs`: Number of training epochs
+- `datasets`: Dataset configurations and paths
+- `hardware.num_gpus`: Number of GPUs to use
+
+### DeepSpeed Configuration
+
+For 70B models or memory optimization, use the enhanced DeepSpeed config:
+
+```yaml
+# In your training config
+deepspeed_config_path: "configs/deepspeed_70b_config.json"
+```
+
+## 📊 Data Format
+
+### Training Data Format
+
+Your training data should be in JSON format:
+
+```json
+[
+  {
+    "audio_path": "path/to/audio.wav",
+    "text": "Transcription or response text",
+    "speaker_id": "optional_speaker_id",
+    "metadata": "optional_additional_info"
+  }
+]
+```
+
+### Multi-task Data Format
+
+For DPO training, include preference pairs:
+
+```json
+[
+  {
+    "audio_path": "path/to/audio.wav", 
+    "chosen": "Better response text",
+    "rejected": "Worse response text",
+    "instruction": "Optional instruction"
+  }
+]
+```
+
+### Evaluation Data Format
+
+```json
+{
+  "transcription": [
+    {
+      "audio_path": "path/to/audio.wav",
+      "reference": "Ground truth transcription"
+    }
+  ],
+  "qa": [
+    {
+      "audio_path": "path/to/audio.wav", 
+      "question": "What do you hear?",
+      "answer": "Expected answer"
+    }
+  ],
+  "classification": [
+    {
+      "audio_path": "path/to/audio.wav",
+      "label": "speech"
+    }
+  ],
+  "classes": ["speech", "music", "sound", "noise"]
+}
+```
+
+## 🔧 Advanced Usage
+
+### Custom Datasets
+
+Convert your dataset to the required format:
+
+```bash
+# Common Voice
+python tools/data_converter.py \
+    --dataset common_voice \
+    --data_dir /path/to/common_voice \
+    --split train
+
+# LibriSpeech
+python tools/data_converter.py \
+    --dataset librispeech \
+    --data_dir /path/to/librispeech \
+    --split train-clean-100
+
+# Custom dataset with metadata file
+python tools/data_converter.py \
+    --dataset custom \
+    --data_dir /path/to/audio/files \
+    --metadata_file metadata.csv
+```
+
+### Custom Model Architecture
+
+Add your custom LLM by:
+
+1. Creating a new config file in `configs/models/`
+2. Specifying the `llm_name` and `llm_type` 
+3. Adjusting the `audio_projector_config` if needed
+
+### Monitoring Training
+
+Training logs and metrics are automatically saved:
+
+- **Weights & Biases**: Set `WANDB_PROJECT` environment variable
+- **TensorBoard**: Logs saved to `outputs/tensorboard/`
+- **Console logs**: Real-time training progress
+
+View training progress:
+
+```bash
+# TensorBoard
+tensorboard --logdir outputs/tensorboard
+
+# Check training logs
+tail -f outputs/pipeline_*/pipeline.log
+```
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1. **Out of Memory Errors**
+   - Reduce `batch_size` in config
+   - Use gradient checkpointing
+   - Use DeepSpeed ZeRO-3 optimization
+   - For 70B models, use `configs/deepspeed_70b_config.json`
+
+2. **CUDA Errors**
+   - Check CUDA version compatibility
+   - Verify GPU memory availability
+   - Try reducing model size or batch size
+
+3. **Data Loading Issues**
+   - Verify audio file paths in dataset files
+   - Check audio file formats (supported: wav, mp3, flac)
+   - Ensure proper sampling rate (16kHz recommended)
+
+4. **Convergence Issues**
+   - Adjust learning rate
+   - Check data quality and distribution
+   - Verify loss scaling for mixed precision
+
+### Performance Optimization
+
+- **For 7B models**: Use 8 GPUs with batch size 32-64
+- **For 70B models**: Use 16+ GPUs with batch size 16-32
+- **Memory optimization**: Enable CPU offloading in DeepSpeed config
+- **Speed optimization**: Use bf16 instead of fp16 when available
+
+## 📝 Citation
+
+If you use this implementation, please cite the original Qwen2-Audio paper:
+
+```bibtex
+@article{qwen2audio2024,
+  title={Qwen2-Audio: Large Language Model for Audio Understanding and Generation},
+  author={...},
+  journal={arXiv preprint arXiv:...},
+  year={2024}
+}
+```
+
+## 📄 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## 🤝 Contributing
+
+Contributions are welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
+
+## 📞 Support
+
+For questions and support:
+
+- Create an issue in this repository
+- Check the troubleshooting section
+- Review the configuration examples
+
+## 🎯 Roadmap
+
+- [ ] Support for more LLM backbones (Mistral, Gemma, etc.)
+- [ ] Streaming inference capability
+- [ ] Model quantization and compression
+- [ ] Web interface for easy interaction
+- [ ] Integration with popular audio processing libraries
+- [ ] Multi-modal training (audio + vision)
+
+---
+
+Happy training! 🎵🤖

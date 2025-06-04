@@ -1,0 +1,39 @@
+# Core ML Libraries
+torch>=2.0.0
+torchaudio>=2.0.0
+transformers>=4.36.0
+accelerate>=0.24.0
+deepspeed>=0.12.0
+
+# Audio Processing
+librosa>=0.10.0
+soundfile>=0.12.0
+whisper-openai>=1.0.0
+
+# Data Processing
+datasets>=2.14.0
+numpy>=1.24.0
+pandas>=2.0.0
+
+# Training and Logging
+wandb>=0.16.0
+tensorboard>=2.14.0
+tqdm>=4.65.0
+
+# Configuration and Utilities
+pyyaml>=6.0
+jsonlines>=3.1.0
+fire>=0.5.0
+
+# Optional: For evaluation
+evaluate>=0.4.0
+jiwer>=3.0.0
+sacrebleu>=2.3.0
+
+# Development and Debugging
+ipython>=8.10.0
+jupyter>=1.0.0
+
+# System utilities
+psutil>=5.9.0
+gpustat>=1.1.0 
