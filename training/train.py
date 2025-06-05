@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 import os
+import sys
 import yaml
 import torch
 import argparse
-import wandb
 from transformers import (
     AutoTokenizer,
     WhisperFeatureExtractor,
@@ -15,10 +15,14 @@ from torch.utils.data import DataLoader
 import deepspeed
 from deepspeed.ops.adam import FusedAdam
 from deepspeed.runtime.zero.partition_parameters import ZeroParamStatus
+from datetime import datetime
 
-from model import create_model_from_config, Qwen2AudioModel
-from dataset import create_dataset, collate_fn
-from dpo_trainer import DPOTrainer
+pdj=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(pdj)
+
+from models.model import create_model_from_config, Qwen2AudioModel
+from models.dataset import create_dataset, collate_fn
+from training.dpo_trainer import DPOTrainer
 import logging
 
 # Setup logging
@@ -84,51 +88,42 @@ def setup_deepspeed_config(config: dict) -> str:
     return None
 
 
-def create_training_arguments(config: dict, stage: str) -> TrainingArguments:
-    """Create training arguments from config"""
-    training_config = config.get('training', {})
-    hyperparams = training_config.get('hyperparameters', {})
-    logging_config = config.get('logging', {})
-    checkpointing = config.get('checkpointing', {})
+def create_training_arguments(config, stage):
+    """Create training arguments based on config"""
+    training_config = config["training"]["hyperparameters"]
     
-    # Get stage-specific learning rate
-    stage_lr = hyperparams.get('stage_lr', {})
-    learning_rate = stage_lr.get(stage, hyperparams.get('learning_rate', 1e-5))
+    # Get output directory
+    output_dir = f"outputs/{stage}_{config['model']['llm_backbone']['model_type']}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     
-    # Setup output directory
-    output_dir = os.path.join(
-        logging_config.get('output_dir', 'outputs'),
-        f"{stage}_{logging_config.get('run_name', 'experiment')}"
-    )
+    # Ensure numeric values are correctly typed
+    learning_rate = float(training_config["learning_rate"])
+    weight_decay = float(training_config["weight_decay"])
+    warmup_ratio = float(training_config["warmup_ratio"])
+    max_grad_norm = float(training_config["max_grad_norm"])
     
+    # Debug: Print parameter types
+    logger.info(f"Training parameters: lr={learning_rate} (type: {type(learning_rate)}), wd={weight_decay} (type: {type(weight_decay)})")
+    
+    # Create training arguments
     args = TrainingArguments(
         output_dir=output_dir,
-        per_device_train_batch_size=hyperparams.get('per_device_train_batch_size', 4),
-        per_device_eval_batch_size=hyperparams.get('per_device_eval_batch_size', 8),
-        gradient_accumulation_steps=hyperparams.get('gradient_accumulation_steps', 4),
+        per_device_train_batch_size=int(training_config["per_device_train_batch_size"]),
+        per_device_eval_batch_size=int(training_config["per_device_eval_batch_size"]),
+        gradient_accumulation_steps=int(training_config["gradient_accumulation_steps"]),
         learning_rate=learning_rate,
-        weight_decay=hyperparams.get('weight_decay', 0.1),
-        warmup_ratio=hyperparams.get('warmup_ratio', 0.1),
-        max_grad_norm=hyperparams.get('max_grad_norm', 1.0),
-        num_train_epochs=hyperparams.get('num_train_epochs', 3),
-        max_steps=hyperparams.get('max_steps', -1),
-        evaluation_strategy=hyperparams.get('evaluation_strategy', 'steps'),
-        eval_steps=hyperparams.get('eval_steps', 1000),
-        save_steps=hyperparams.get('save_steps', 1000),
-        logging_steps=hyperparams.get('logging_steps', 100),
-        save_total_limit=checkpointing.get('save_total_limit', 3),
-        load_best_model_at_end=checkpointing.get('load_best_model_at_end', True),
-        metric_for_best_model=checkpointing.get('metric_for_best_model', 'eval_loss'),
-        greater_is_better=checkpointing.get('greater_is_better', False),
-        dataloader_pin_memory=True,
-        dataloader_num_workers=4,
+        weight_decay=weight_decay,
+        warmup_ratio=warmup_ratio,
+        max_grad_norm=max_grad_norm,
+        num_train_epochs=int(training_config["num_train_epochs"]),
+        max_steps=int(training_config["max_steps"]),
+        logging_steps=int(training_config["logging_steps"]),
+        eval_steps=int(training_config["eval_steps"]),
+        save_steps=int(training_config["save_steps"]),
+        report_to=["tensorboard"],
         remove_unused_columns=False,
-        report_to="wandb" if logging_config.get('wandb_project') else None,
-        run_name=f"{stage}_{logging_config.get('run_name', 'experiment')}",
-        bf16=config.get('hardware', {}).get('mixed_precision') == 'bf16',
-        fp16=config.get('hardware', {}).get('mixed_precision') == 'fp16',
         ddp_find_unused_parameters=False,
-        deepspeed=setup_deepspeed_config(config)
+        deepspeed=config["training"]["deepspeed"]["config_file"] if config["training"]["deepspeed"]["enabled"] else None,
+        torch_compile=False,  # Disable torch.compile
     )
     
     return args
@@ -144,6 +139,10 @@ def train_pretrain_stage(config: dict, model: Qwen2AudioModel, tokenizer, featur
     
     # Create training arguments
     training_args = create_training_arguments(config, "pretrain")
+    
+    # logger.info("--------------------------------training_args:--------------------------------")
+    # logger.info(training_args)
+    # logger.info("------------------------------------------------------------------------------")
     
     # Create trainer
     trainer = Trainer(
@@ -228,7 +227,7 @@ def main():
     parser.add_argument("--model_config", type=str, help="Path to model-specific config file")
     parser.add_argument("--stage", type=str, choices=["pretrain", "sft", "dpo"], required=True, help="Training stage")
     parser.add_argument("--resume_from_checkpoint", type=str, help="Path to checkpoint to resume from")
-    parser.add_argument("--local_rank", type=int, default=-1, help="Local rank for distributed training")
+    parser.add_argument("--local_rank", "--local-rank", type=int, default=0, help="Local rank for distributed training")
     
     args = parser.parse_args()
     
@@ -237,16 +236,6 @@ def main():
     
     # Set training stage in config
     config['training']['stage'] = args.stage
-    
-    # Initialize wandb if configured
-    logging_config = config.get('logging', {})
-    if logging_config.get('wandb_project'):
-        wandb.init(
-            project=logging_config['wandb_project'],
-            entity=logging_config.get('wandb_entity'),
-            name=f"{args.stage}_{logging_config.get('run_name', 'experiment')}",
-            config=config
-        )
     
     # Create model
     logger.info("Creating model...")
@@ -275,10 +264,6 @@ def main():
         raise ValueError(f"Unknown training stage: {args.stage}")
     
     logger.info(f"Training {args.stage} stage completed!")
-    
-    # Close wandb
-    if logging_config.get('wandb_project'):
-        wandb.finish()
 
 
 if __name__ == "__main__":

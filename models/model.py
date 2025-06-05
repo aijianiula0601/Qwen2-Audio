@@ -10,6 +10,7 @@ from transformers import (
 )
 from typing import Optional, Tuple, List, Dict, Any
 import math
+import os
 
 
 class AudioProjector(nn.Module):
@@ -66,6 +67,7 @@ class Qwen2AudioConfig(PretrainedConfig):
         freeze_llm=False,
         audio_start_token="<|audio_bos|>",
         audio_end_token="<|audio_eos|>",
+        hidden_size=896,  # Add hidden_size for DeepSpeed auto-config
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -76,14 +78,17 @@ class Qwen2AudioConfig(PretrainedConfig):
         self.freeze_llm = freeze_llm
         self.audio_start_token = audio_start_token
         self.audio_end_token = audio_end_token
+        self.hidden_size = hidden_size  # Add this for DeepSpeed
         
         if audio_projector_config is None:
             audio_projector_config = {
                 'input_size': 1280,
-                'hidden_size': 4096,
-                'intermediate_size': 16384,
+                'hidden_size': hidden_size,  # Use the hidden_size parameter
+                'intermediate_size': hidden_size * 4,  # 4 * hidden_size
                 'num_layers': 2
             }
+        # Ensure hidden_size in projector config matches
+        audio_projector_config['hidden_size'] = hidden_size
         self.audio_projector_config = audio_projector_config
 
 
@@ -97,10 +102,12 @@ class Qwen2AudioModel(PreTrainedModel):
         super().__init__(config)
         self.config = config
         
+        torch_dtype = getattr(config, 'dtype', torch.float32)
+        
         # Initialize audio encoder (Whisper)
         self.audio_encoder = WhisperModel.from_pretrained(
             config.audio_encoder_name,
-            torch_dtype=config.dtype
+            torch_dtype=torch_dtype
         ).encoder
         
         # Freeze audio encoder if specified
@@ -109,10 +116,14 @@ class Qwen2AudioModel(PreTrainedModel):
                 param.requires_grad = False
                 
         # Initialize LLM backbone
+        # Check if it's a local path
+        is_local_path = os.path.exists(config.llm_name) and os.path.isdir(config.llm_name)
+        
         self.llm = AutoModelForCausalLM.from_pretrained(
             config.llm_name,
-            torch_dtype=config.dtype,
-            trust_remote_code=True
+            torch_dtype=torch_dtype,
+            trust_remote_code=True,
+            local_files_only=is_local_path
         )
         
         # Freeze LLM if specified
@@ -126,7 +137,8 @@ class Qwen2AudioModel(PreTrainedModel):
         # Initialize tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(
             config.llm_name,
-            trust_remote_code=True
+            trust_remote_code=True,
+            local_files_only=is_local_path
         )
         
         # Add special tokens if not present
@@ -143,21 +155,25 @@ class Qwen2AudioModel(PreTrainedModel):
         """
         Encode audio using Whisper encoder
         Args:
-            audio_values: [batch_size, audio_length]
+            audio_values: [batch_size, n_mels, time] - mel-spectrogram features from WhisperFeatureExtractor
         Returns:
             audio_features: [batch_size, sequence_length, hidden_size]
         """
         with torch.no_grad() if self.config.freeze_audio_encoder else torch.enable_grad():
-            # Whisper expects input in shape [batch_size, n_mels, time]
-            # If input is raw audio, we need to extract mel-spectrogram
-            if audio_values.dim() == 2:  # Raw audio
-                # This would typically involve mel-spectrogram extraction
-                # For now, assume audio_values are already mel-spectrograms
-                audio_features = self.audio_encoder(audio_values).last_hidden_state
-            else:
-                audio_features = self.audio_encoder(audio_values).last_hidden_state
+            # audio_values should already be mel-spectrograms from WhisperFeatureExtractor
+            # Shape: [batch_size, n_mels, time]
+            # Ensure audio_values has the correct dtype (match the model's dtype)
+            target_dtype = next(self.audio_encoder.parameters()).dtype
+            if audio_values.dtype != target_dtype:
+                audio_values = audio_values.to(target_dtype)
+                
+            audio_features = self.audio_encoder(audio_values).last_hidden_state
                 
         # Project audio features to LLM hidden space
+        # Ensure consistency in data types
+        if audio_features.dtype != next(self.audio_projector.parameters()).dtype:
+            audio_features = audio_features.to(next(self.audio_projector.parameters()).dtype)
+            
         projected_features = self.audio_projector(audio_features)
         return projected_features
     
@@ -240,7 +256,6 @@ class Qwen2AudioModel(PreTrainedModel):
         audio_features = None
         if audio_values is not None:
             audio_features = self.encode_audio(audio_values)
-        print("--------------------------------audio_values", audio_values.shape, audio_values.dtype)
         # Prepare input embeddings
         inputs_embeds, attention_mask, labels = self.prepare_inputs_embeds(
             input_ids=input_ids,
@@ -248,9 +263,6 @@ class Qwen2AudioModel(PreTrainedModel):
             attention_mask=attention_mask,
             labels=labels
         )
-        print("--------------------------------inputs_embeds", inputs_embeds.shape, inputs_embeds.dtype)
-        print("--------------------------------attention_mask", attention_mask.shape, attention_mask.dtype)
-        print("--------------------------------labels", labels.shape, labels.dtype)
         # Forward through LLM
         outputs = self.llm(
             inputs_embeds=inputs_embeds,
@@ -314,7 +326,8 @@ def create_model_from_config(config_dict: Dict[str, Any]) -> Qwen2AudioModel:
         freeze_audio_encoder=audio_encoder_config.get('freeze_encoder', False),
         freeze_llm=llm_config.get('freeze_llm', False),
         audio_start_token=special_tokens.get('audio_start_token', '<|audio_bos|>'),
-        audio_end_token=special_tokens.get('audio_end_token', '<|audio_eos|>')
+        audio_end_token=special_tokens.get('audio_end_token', '<|audio_eos|>'),
+        hidden_size=projector_config.get('hidden_size', 896)
     )
     
     # Create and return model

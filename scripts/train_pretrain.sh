@@ -6,7 +6,7 @@
 set -e
 
 # Default configurations
-MODEL_TYPE="qwen2_7b"  # qwen2_7b, qwen2_70b, llama3_8b
+MODEL_TYPE="qwen2_0.5b"  # qwen2_7b, qwen2_70b, llama3_8b, qwen2_0.5b
 CONFIG_FILE="configs/base_config.yaml"
 MODEL_CONFIG_DIR="configs/models"
 NUM_GPUS=8
@@ -38,7 +38,7 @@ while [[ $# -gt 0 ]]; do
         -h|--help)
             echo "Usage: $0 [OPTIONS]"
             echo "Options:"
-            echo "  --model MODEL_TYPE     Model type (qwen2_7b, qwen2_70b, llama3_8b)"
+            echo "  --model MODEL_TYPE     Model type (qwen2_7b, qwen2_70b, llama3_8b, qwen2_0.5b)"
             echo "  --config CONFIG_FILE   Path to base config file"
             echo "  --gpus NUM_GPUS        Number of GPUs to use"
             echo "  --port PORT            Master port for distributed training"
@@ -55,11 +55,11 @@ done
 
 # Validate model type
 case $MODEL_TYPE in
-    qwen2_7b|qwen2_70b|llama3_8b)
+    qwen2_7b|qwen2_70b|llama3_8b|qwen2_0.5b|/home/huangjiahong.dracu/hjh/huggingface/Qwen2-0.5B)
         ;;
     *)
         echo "Error: Invalid model type '$MODEL_TYPE'"
-        echo "Supported types: qwen2_7b, qwen2_70b, llama3_8b"
+        echo "Supported types: qwen2_7b, qwen2_70b, llama3_8b, qwen2_0.5b"
         exit 1
         ;;
 esac
@@ -102,8 +102,8 @@ mkdir -p "$OUTPUT_DIR"
 echo "Output directory: $OUTPUT_DIR"
 
 # Build training command
-TRAINING_CMD="python -m torch.distributed.launch \
-    --nproc_per_node=$NUM_GPUS \
+TRAINING_CMD="deepspeed \
+    --num_gpus=$NUM_GPUS \
     --master_port=$MASTER_PORT \
     training/train.py \
     --config $CONFIG_FILE \
