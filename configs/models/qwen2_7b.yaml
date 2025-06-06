@@ -8,6 +8,12 @@ model:
     num_hidden_layers: 28
     vocab_size: 151936
     max_position_embeddings: 131072
+    freeze_llm: false
+    
+  audio_encoder:
+    model_name: "openai/whisper-large-v3"
+    freeze_encoder: false
+    freeze_layers: []
     
   # Audio projector adapted for Qwen2-7B
   audio_projector:
@@ -16,8 +22,38 @@ model:
     intermediate_size: 14336
     num_layers: 2
     
+  special_tokens:
+    audio_start_token: "<|audio_bos|>"
+    audio_end_token: "<|audio_eos|>"
+    pad_token: "<|endoftext|>"
+    
 training:
   hyperparameters:
     per_device_train_batch_size: 2  # Smaller for 7B model
+    per_device_eval_batch_size: 2
     gradient_accumulation_steps: 8
-    learning_rate: 1e-5 
+    learning_rate: 1e-5
+    weight_decay: 0.1
+    warmup_ratio: 0.1
+    max_grad_norm: 1.0
+    num_train_epochs: 3
+    max_steps: -1
+    eval_steps: 1000
+    save_steps: 1000
+    logging_steps: 1  # Log every step
+    evaluation_strategy: "steps"
+    save_strategy: "steps"
+    load_best_model_at_end: true
+    metric_for_best_model: "eval_loss"
+    greater_is_better: false
+    report_to: ["tensorboard"]
+    logging_dir: "tensorboard/pretrain_qwen2_7b"
+    dataloader_num_workers: 4
+    bf16: true
+    tf32: true
+    gradient_checkpointing: true
+    group_by_length: true
+    remove_unused_columns: false
+  deepspeed:
+    enabled: true
+    config_file: "configs/deepspeed_config.json" 
