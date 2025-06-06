@@ -28,7 +28,7 @@
     },
     "gradient_accumulation_steps": "auto",
     "gradient_clipping": "auto",
-    "steps_per_print": 100,
+    "steps_per_print": 1,
     "train_batch_size": "auto",
     "train_micro_batch_size_per_gpu": "auto",
     "wall_clock_breakdown": false,
@@ -61,8 +61,8 @@
     },
     "tensorboard": {
         "enabled": true,
-        "output_path": "outputs/tensorboard",
-        "job_name": "qwen2_audio_70b_training"
+        "output_path": "tensorboard/pretrain_qwen2_0.5b",
+        "job_name": "qwen2_audio_training"
     },
     "flops_profiler": {
         "enabled": false,

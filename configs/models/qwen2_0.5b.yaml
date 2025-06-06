@@ -1,6 +1,9 @@
 model:
   llm_backbone:
+    # v100_f178
     model_name: "Qwen/Qwen2-0.5B"
+    # a100_2
+    # model_name: "/home/huangjiahong.dracu/hjh/huggingface/Qwen2-0.5B"
     model_type: "qwen2"
     freeze_llm: false
   audio_encoder:
@@ -29,14 +32,14 @@ training:
     max_steps: -1
     eval_steps: 1000
     save_steps: 1000
-    logging_steps: 100
+    logging_steps: 1
     evaluation_strategy: "steps"
     save_strategy: "steps"
     load_best_model_at_end: true
     metric_for_best_model: "eval_loss"
     greater_is_better: false
-    report_to: "tensorboard"
-    logging_dir: "./logs"
+    report_to: ["tensorboard"]
+    logging_dir: "tensorboard/pretrain_qwen2_0.5b"
     dataloader_num_workers: 4
     bf16: true
     tf32: true

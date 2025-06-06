@@ -36,6 +36,10 @@ class AudioTrainingCallback(TrainerCallback):
     def on_log(self, args, state, control, model=None, logs=None, **kwargs):
         """Log additional metrics"""
         if logs and state.is_world_process_zero:
+            # Debug print
+            logger.info(f"Step {state.global_step}: Logging metrics to TensorBoard")
+            logger.info(f"Logs content: {logs}")
+            
             # Log GPU memory usage
             if torch.cuda.is_available():
                 gpu_memory = torch.cuda.max_memory_allocated() / 1024**3  # GB
@@ -44,11 +48,37 @@ class AudioTrainingCallback(TrainerCallback):
             # Log learning rate
             if 'learning_rate' in logs:
                 logs['lr'] = logs['learning_rate']
+            
+            # Log training loss
+            if 'loss' in logs:
+                logs['train_loss'] = logs['loss']
+            
+            # Log step and epoch
+            logs['step'] = state.global_step
+            logs['epoch'] = state.epoch
+            
+            # Log model parameters
+            if model is not None:
+                total_params = sum(p.numel() for p in model.parameters())
+                trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+                logs['total_params'] = total_params
+                logs['trainable_params'] = trainable_params
+            
+            # Debug print after adding metrics
+            logger.info(f"Final logs to be written: {logs}")
     
     def on_save(self, args, state, control, model=None, **kwargs):
         """Custom save logic"""
         if state.is_world_process_zero:
             logger.info(f"Saving checkpoint at step {state.global_step}")
+            
+    def on_step_end(self, args, state, control, model=None, **kwargs):
+        """Log metrics at the end of each step"""
+        if state.is_world_process_zero:
+            logger.info(f"Step {state.global_step} completed")
+            if torch.cuda.is_available():
+                gpu_memory = torch.cuda.max_memory_allocated() / 1024**3  # GB
+                logger.info(f"GPU Memory: {gpu_memory:.2f} GB")
 
 
 def load_config(config_path: str, model_config_path: str = None) -> dict:
@@ -95,6 +125,10 @@ def create_training_arguments(config, stage):
     # Get output directory
     output_dir = f"outputs/{stage}_{config['model']['llm_backbone']['model_type']}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     
+    # Set TensorBoard log directory
+    tensorboard_dir = f"tensorboard/{stage}_{config['model']['llm_backbone']['model_type']}"
+    os.makedirs(tensorboard_dir, exist_ok=True)
+    
     # Ensure numeric values are correctly typed
     learning_rate = float(training_config["learning_rate"])
     weight_decay = float(training_config["weight_decay"])
@@ -103,6 +137,7 @@ def create_training_arguments(config, stage):
     
     # Debug: Print parameter types
     logger.info(f"Training parameters: lr={learning_rate} (type: {type(learning_rate)}), wd={weight_decay} (type: {type(weight_decay)})")
+    logger.info(f"TensorBoard log directory: {tensorboard_dir}")
     
     # Create training arguments
     args = TrainingArguments(
@@ -116,15 +151,21 @@ def create_training_arguments(config, stage):
         max_grad_norm=max_grad_norm,
         num_train_epochs=int(training_config["num_train_epochs"]),
         max_steps=int(training_config["max_steps"]),
-        logging_steps=int(training_config["logging_steps"]),
+        logging_steps=1,  # Log every step
         eval_steps=int(training_config["eval_steps"]),
         save_steps=int(training_config["save_steps"]),
         report_to=["tensorboard"],
+        logging_dir=tensorboard_dir,
+        logging_first_step=True,  # Log the first step
+        logging_nan_inf_filter=False,  # Don't filter out NaN/Inf values
         remove_unused_columns=False,
         ddp_find_unused_parameters=False,
         deepspeed=config["training"]["deepspeed"]["config_file"] if config["training"]["deepspeed"]["enabled"] else None,
         torch_compile=False,  # Disable torch.compile
     )
+    
+    # Debug: Print training arguments
+    logger.info(f"Training arguments: {args}")
     
     return args
 
@@ -140,9 +181,12 @@ def train_pretrain_stage(config: dict, model: Qwen2AudioModel, tokenizer, featur
     # Create training arguments
     training_args = create_training_arguments(config, "pretrain")
     
-    # logger.info("--------------------------------training_args:--------------------------------")
-    # logger.info(training_args)
-    # logger.info("------------------------------------------------------------------------------")
+    # Debug print training arguments
+    logger.info("Training arguments:")
+    logger.info(f"Output directory: {training_args.output_dir}")
+    logger.info(f"Logging directory: {training_args.logging_dir}")
+    logger.info(f"Logging steps: {training_args.logging_steps}")
+    logger.info(f"Report to: {training_args.report_to}")
     
     # Create trainer
     trainer = Trainer(
