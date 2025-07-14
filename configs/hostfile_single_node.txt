@@ -1,0 +1,3 @@
+# Single Node Configuration - 8 GPUs on current machine
+# 单节点配置 - 当前机器的8个GPU
+localhost slots=8 

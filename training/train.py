@@ -135,8 +135,14 @@ def create_training_arguments(config, stage):
     warmup_ratio = float(training_config["warmup_ratio"])
     max_grad_norm = float(training_config["max_grad_norm"])
     
+    # Get bf16 setting from config (default to False if not specified)
+    bf16_enabled = training_config.get("bf16", False)
+    tf32_enabled = training_config.get("tf32", False)
+    gradient_checkpointing_enabled = training_config.get("gradient_checkpointing", False)
+    
     # Debug: Print parameter types
     logger.info(f"Training parameters: lr={learning_rate} (type: {type(learning_rate)}), wd={weight_decay} (type: {type(weight_decay)})")
+    logger.info(f"Mixed precision settings: bf16={bf16_enabled}, tf32={tf32_enabled}")
     logger.info(f"TensorBoard log directory: {tensorboard_dir}")
     
     # Create training arguments
@@ -151,17 +157,27 @@ def create_training_arguments(config, stage):
         max_grad_norm=max_grad_norm,
         num_train_epochs=int(training_config["num_train_epochs"]),
         max_steps=int(training_config["max_steps"]),
-        logging_steps=1,  # Log every step
+        logging_steps=int(training_config.get("logging_steps", 1)),  # Use config value or default to 1
         eval_steps=int(training_config["eval_steps"]),
         save_steps=int(training_config["save_steps"]),
-        report_to=["tensorboard"],
-        logging_dir=tensorboard_dir,
+        eval_strategy="no",  # Disable evaluation to avoid eval_dataset requirement
+        save_strategy=training_config.get("save_strategy", "steps"),  # Keep save_strategy as is
+        load_best_model_at_end=False,  # Disable since we're not evaluating
+        metric_for_best_model=training_config.get("metric_for_best_model", "eval_loss"),  # Add metric for best model
+        greater_is_better=training_config.get("greater_is_better", False),  # Add greater is better
+        report_to=training_config.get("report_to", ["tensorboard"]),  # Use config value or default
+        logging_dir=training_config.get("logging_dir", tensorboard_dir),  # Use config value or default
         logging_first_step=True,  # Log the first step
         logging_nan_inf_filter=False,  # Don't filter out NaN/Inf values
-        remove_unused_columns=False,
+        remove_unused_columns=training_config.get("remove_unused_columns", False),  # Use config value
         ddp_find_unused_parameters=False,
         deepspeed=config["training"]["deepspeed"]["config_file"] if config["training"]["deepspeed"]["enabled"] else None,
         torch_compile=False,  # Disable torch.compile
+        bf16=bf16_enabled,  # Add bf16 parameter
+        tf32=tf32_enabled,  # Add tf32 parameter
+        gradient_checkpointing=gradient_checkpointing_enabled,  # Add gradient checkpointing
+        dataloader_num_workers=int(training_config.get("dataloader_num_workers", 0)),  # Add dataloader workers
+        group_by_length=training_config.get("group_by_length", False),  # Add group by length
     )
     
     # Debug: Print training arguments

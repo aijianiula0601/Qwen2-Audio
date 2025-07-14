@@ -12,6 +12,10 @@ MODEL_CONFIG_DIR="configs/models"
 NUM_GPUS=8
 MASTER_PORT=29500
 
+# Environment configurations
+CONDA_ENV_NAME="qwen2-audio-multinode"  # Default conda environment name
+SKIP_ENV_CHECK=false                   # Whether to skip environment activation
+
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -35,6 +39,14 @@ while [[ $# -gt 0 ]]; do
             RESUME_CHECKPOINT="$2"
             shift 2
             ;;
+        --conda-env)
+            CONDA_ENV_NAME="$2"
+            shift 2
+            ;;
+        --skip-env-check)
+            SKIP_ENV_CHECK=true
+            shift
+            ;;
         -h|--help)
             echo "Usage: $0 [OPTIONS]"
             echo "Options:"
@@ -43,6 +55,8 @@ while [[ $# -gt 0 ]]; do
             echo "  --gpus NUM_GPUS        Number of GPUs to use"
             echo "  --port PORT            Master port for distributed training"
             echo "  --resume CHECKPOINT    Resume from checkpoint"
+            echo "  --conda-env ENV_NAME   Conda environment name (default: qwen2-audio-multinode)"
+            echo "  --skip-env-check       Skip environment activation and checks"
             echo "  -h, --help             Show this help message"
             exit 0
             ;;
@@ -52,6 +66,120 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Environment setup and activation (reuse from multinode script)
+setup_environment() {
+    echo "=== Environment Setup ==="
+    
+    if [ "$SKIP_ENV_CHECK" = true ]; then
+        echo "Skipping environment activation (--skip-env-check specified)"
+        return
+    fi
+    
+    # Check if conda is available
+    if command -v conda &> /dev/null; then
+        echo "Found conda, attempting to activate environment: $CONDA_ENV_NAME"
+        
+        # Initialize conda for this shell
+        source "$(conda info --base)/etc/profile.d/conda.sh" 2>/dev/null || {
+            echo "Warning: Could not initialize conda. Trying alternative method..."
+            # Try alternative conda initialization
+            if [ -f "$HOME/miniconda3/etc/profile.d/conda.sh" ]; then
+                source "$HOME/miniconda3/etc/profile.d/conda.sh"
+            elif [ -f "$HOME/anaconda3/etc/profile.d/conda.sh" ]; then
+                source "$HOME/anaconda3/etc/profile.d/conda.sh"
+            else
+                echo "Warning: Could not find conda initialization script"
+            fi
+        }
+        
+        # Check if the environment exists
+        if conda env list | grep -q "^$CONDA_ENV_NAME "; then
+            echo "Activating conda environment: $CONDA_ENV_NAME"
+            conda activate "$CONDA_ENV_NAME"
+            
+            # Verify activation
+            if [[ "$CONDA_DEFAULT_ENV" == "$CONDA_ENV_NAME" ]]; then
+                echo "✅ Successfully activated conda environment: $CONDA_ENV_NAME"
+                echo "Python path: $(which python)"
+                echo "Python version: $(python --version 2>&1)"
+            else
+                echo "❌ Failed to activate conda environment: $CONDA_ENV_NAME"
+                echo "Current environment: $CONDA_DEFAULT_ENV"
+                echo "Available environments:"
+                conda env list
+                exit 1
+            fi
+        else
+            echo "❌ Conda environment '$CONDA_ENV_NAME' not found!"
+            echo "Available environments:"
+            conda env list
+            echo ""
+            echo "Please create the environment first:"
+            echo "  bash scripts/setup_multinode_env.sh --method conda --env-name $CONDA_ENV_NAME"
+            exit 1
+        fi
+    else
+        echo "Conda not found. Checking for virtual environment..."
+        
+        # Check for virtual environment
+        if [ -f "$CONDA_ENV_NAME/bin/activate" ]; then
+            echo "Activating virtual environment: $CONDA_ENV_NAME"
+            source "$CONDA_ENV_NAME/bin/activate"
+            echo "✅ Activated virtual environment: $CONDA_ENV_NAME"
+            echo "Python path: $(which python)"
+        elif [ -f "activate_env.sh" ]; then
+            echo "Using project environment activation script"
+            source activate_env.sh
+        else
+            echo "⚠️  No conda or virtual environment found."
+            echo "Using system Python: $(which python)"
+            echo "Python version: $(python --version 2>&1)"
+            echo ""
+            echo "Recommendation: Set up a dedicated environment:"
+            echo "  bash scripts/setup_multinode_env.sh --method conda"
+        fi
+    fi
+    
+    # Verify key packages
+    echo ""
+    echo "=== Environment Verification ==="
+    python -c "
+import sys
+print(f'Python executable: {sys.executable}')
+
+try:
+    import torch
+    print(f'✅ PyTorch: {torch.__version__}')
+    print(f'✅ CUDA available: {torch.cuda.is_available()}')
+    if torch.cuda.is_available():
+        print(f'✅ CUDA version: {torch.version.cuda}')
+        print(f'✅ GPU count: {torch.cuda.device_count()}')
+except ImportError as e:
+    print(f'❌ PyTorch import failed: {e}')
+    sys.exit(1)
+
+try:
+    import deepspeed
+    print(f'✅ DeepSpeed: {deepspeed.__version__}')
+except ImportError as e:
+    print(f'❌ DeepSpeed import failed: {e}')
+    sys.exit(1)
+
+try:
+    import transformers
+    print(f'✅ Transformers: {transformers.__version__}')
+except ImportError as e:
+    print(f'❌ Transformers import failed: {e}')
+    sys.exit(1)
+" || {
+        echo "❌ Environment verification failed!"
+        echo "Please check your Python environment and dependencies."
+        exit 1
+    }
+    
+    echo "✅ Environment verification passed!"
+}
 
 # Validate model type
 case $MODEL_TYPE in
@@ -73,6 +201,10 @@ echo "Base config: $CONFIG_FILE"
 echo "Model config: $MODEL_CONFIG_FILE"
 echo "GPUs: $NUM_GPUS"
 echo "Master port: $MASTER_PORT"
+echo "Conda environment: $CONDA_ENV_NAME"
+
+# Setup and verify environment
+setup_environment
 
 # Check if config files exist
 if [ ! -f "$CONFIG_FILE" ]; then

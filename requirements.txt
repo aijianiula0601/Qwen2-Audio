@@ -9,14 +9,11 @@ numpy==2.2.6
 opencc==1.1.9
 pandas==2.2.3
 PyYAML==6.0.2
-PyYAML==6.0.2
 regex==2024.11.6
 Requests==2.32.3
 sacrebleu==2.5.1
 scikit_learn==1.6.1
 soundfile==0.13.1
-torch==2.6.0
-torchaudio==2.6.0+cu124
 tqdm==4.67.1
 transformers==4.52.4
-zhconv==1.4.3
+zhconv==1.4.3 

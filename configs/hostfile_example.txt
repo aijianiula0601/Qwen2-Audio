@@ -1,0 +1,25 @@
+# DeepSpeed Hostfile Example for Multi-Node Training
+# Format: hostname slots=number_of_gpus
+
+# Example for 4 nodes, each with 8 GPUs
+node0.cluster.com slots=8
+node1.cluster.com slots=8  
+node2.cluster.com slots=8
+node3.cluster.com slots=8
+
+# Alternative format with IP addresses
+# 192.168.1.10 slots=8
+# 192.168.1.11 slots=8
+# 192.168.1.12 slots=8  
+# 192.168.1.13 slots=8
+
+# For nodes with different GPU counts
+# node0.cluster.com slots=8
+# node1.cluster.com slots=4
+# node2.cluster.com slots=8
+
+# Notes:
+# - hostname should be resolvable from all nodes
+# - SSH passwordless login should be configured between all nodes
+# - All nodes should have the same environment and code
+# - The first node in the hostfile is typically the master node 

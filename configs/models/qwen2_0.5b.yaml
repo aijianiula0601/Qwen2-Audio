@@ -42,7 +42,7 @@ training:
     logging_dir: "tensorboard/pretrain_qwen2_0.5b"
     dataloader_num_workers: 4
     bf16: true
-    tf32: true
+    tf32: false
     gradient_checkpointing: true
     group_by_length: true
     remove_unused_columns: false
