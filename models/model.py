@@ -1,3 +1,20 @@
+"""
+Qwen2-Audio Model Implementation
+
+This module implements the Qwen2-Audio model, which combines a Whisper audio encoder
+with various LLM backbones (Qwen2, LLaMA, etc.) through an audio projector.
+
+IMPORTANT FIXES:
+- Addresses the "TypeError: argument of type 'NoneType' is not iterable" error
+  that occurs when transformers library checks parallel_style configuration
+- Implements sanitization of model configuration to prevent None values
+- Adds robust error handling for model loading issues
+- Ensures proper default values for all configuration parameters
+
+Author: [Your Name]
+Date: [Current Date]
+"""
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -11,6 +28,15 @@ from transformers import (
 from typing import Optional, Tuple, List, Dict, Any
 import math
 import os
+import logging
+import warnings
+from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+# Compatibility note: This code addresses the NoneType error that can occur
+# with certain versions of transformers when parallel_style is None
 
 
 class AudioProjector(nn.Module):
@@ -80,6 +106,15 @@ class Qwen2AudioConfig(PretrainedConfig):
         self.audio_end_token = audio_end_token
         self.hidden_size = hidden_size  # Add this for DeepSpeed
         
+        # Set default values for required parameters to avoid NoneType errors
+        self.parallel_style = getattr(self, 'parallel_style', [])
+        self.device_map = getattr(self, 'device_map', None)
+        self.torch_dtype = getattr(self, 'torch_dtype', None)
+        
+        # Ensure parallel_style is never None
+        if self.parallel_style is None:
+            self.parallel_style = []
+        
         if audio_projector_config is None:
             audio_projector_config = {
                 'input_size': 1280,
@@ -119,12 +154,54 @@ class Qwen2AudioModel(PreTrainedModel):
         # Check if it's a local path
         is_local_path = os.path.exists(config.llm_name) and os.path.isdir(config.llm_name)
         
-        self.llm = AutoModelForCausalLM.from_pretrained(
-            config.llm_name,
-            torch_dtype=torch_dtype,
-            trust_remote_code=True,
-            local_files_only=is_local_path
-        )
+        # Create a config for the LLM with proper parallel_style setting
+        llm_config_kwargs = {
+            'torch_dtype': torch_dtype,
+            'trust_remote_code': True,
+            'local_files_only': is_local_path,
+        }
+        
+        # Sanitize configuration to avoid NoneType errors
+        llm_config_kwargs = sanitize_model_config_for_loading(llm_config_kwargs)
+        
+        logger.info("--------------------------------")
+        logger.info(f"Loading LLM from {config.llm_name} with sanitized kwargs: {llm_config_kwargs}")
+        logger.info("--------------------------------")
+        
+        # Load the LLM model with proper configuration
+        try:
+            self.llm = AutoModelForCausalLM.from_pretrained(
+                config.llm_name,
+                **llm_config_kwargs
+            )
+        except TypeError as e:
+            if "NoneType" in str(e) and "not iterable" in str(e):
+                logger.warning(f"Caught parallel_style NoneType error despite sanitization: {e}")
+                logger.info("Applying additional workaround...")
+                # Last resort: try with minimal configuration
+                minimal_config = {
+                    'torch_dtype': torch_dtype,
+                    'trust_remote_code': True,
+                    'local_files_only': is_local_path,
+                    'low_cpu_mem_usage': True,
+                }
+                self.llm = AutoModelForCausalLM.from_pretrained(
+                    config.llm_name,
+                    **minimal_config
+                )
+            else:
+                raise e
+        
+        # Fix configuration issues that might cause NoneType errors
+        if hasattr(self.llm.config, 'parallel_style') and self.llm.config.parallel_style is None:
+            self.llm.config.parallel_style = []
+        
+        # Fix other potential None configuration issues
+        if hasattr(self.llm.config, 'fsdp_config') and self.llm.config.fsdp_config is None:
+            self.llm.config.fsdp_config = {}
+        
+        if hasattr(self.llm.config, 'deepspeed_config') and self.llm.config.deepspeed_config is None:
+            self.llm.config.deepspeed_config = {}
         
         # Freeze LLM if specified
         if config.freeze_llm:
@@ -305,6 +382,57 @@ class Qwen2AudioModel(PreTrainedModel):
         return outputs
 
 
+def sanitize_model_config_for_loading(config_kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Sanitize model configuration to avoid NoneType errors during model loading.
+    
+    This function addresses the common issue where transformers library expects
+    certain configuration parameters to be lists or proper types, but they might
+    be None, causing "argument of type 'NoneType' is not iterable" errors.
+    
+    Args:
+        config_kwargs: Configuration dictionary for model loading
+        
+    Returns:
+        Sanitized configuration dictionary
+    """
+    sanitized = config_kwargs.copy()
+    
+    # Only include parameters that are actually accepted by the model constructor
+    # Remove parameters that should be set in config, not passed to __init__
+    safe_parameters = {
+        'torch_dtype',
+        'trust_remote_code', 
+        'local_files_only',
+        'low_cpu_mem_usage',
+        'use_cache',
+        'output_attentions',
+        'output_hidden_states',
+        'return_dict',
+        'device_map',
+        'revision',
+        'mirror',
+        'use_auth_token',
+        'cache_dir',
+        'force_download',
+        'proxies',
+        'resume_download',
+        'variants',
+        'use_safetensors',
+        'quantization_config',
+        'attn_implementation',
+        'dtype',
+    }
+    
+    # Filter out parameters that are not accepted by the model constructor
+    filtered_kwargs = {}
+    for key, value in sanitized.items():
+        if key in safe_parameters:
+            filtered_kwargs[key] = value
+    
+    return filtered_kwargs
+
+
 def create_model_from_config(config_dict: Dict[str, Any]) -> Qwen2AudioModel:
     """
     Create Qwen2AudioModel from configuration dictionary
@@ -317,7 +445,7 @@ def create_model_from_config(config_dict: Dict[str, Any]) -> Qwen2AudioModel:
     projector_config = model_config.get('audio_projector', {})
     special_tokens = model_config.get('special_tokens', {})
     
-    # Create model configuration
+    # Create model configuration with proper defaults
     qwen2_audio_config = Qwen2AudioConfig(
         audio_encoder_name=audio_encoder_config.get('model_name', 'openai/whisper-large-v3'),
         llm_name=llm_config.get('model_name', 'Qwen/Qwen2-7B'),

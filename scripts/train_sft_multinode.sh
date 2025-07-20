@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Qwen2-Audio Multi-Node Pretraining Script
-# This script runs the pretraining stage of Qwen2-Audio across multiple nodes
+# Qwen2-Audio Multi-Node SFT Training Script
+# This script runs the supervised fine-tuning stage of Qwen2-Audio across multiple nodes
 
 set -e
 
@@ -232,7 +232,7 @@ esac
 # Set model-specific config
 MODEL_CONFIG_FILE="${MODEL_CONFIG_DIR}/${MODEL_TYPE}.yaml"
 
-echo "=== Qwen2-Audio Multi-Node Pretraining ==="
+echo "=== Qwen2-Audio Multi-Node SFT Training ==="
 echo "Model type: $MODEL_TYPE"
 echo "Base config: $CONFIG_FILE"
 echo "Model config: $MODEL_CONFIG_FILE"
@@ -258,8 +258,8 @@ if [ ! -f "$MODEL_CONFIG_FILE" ]; then
 fi
 
 # Check if data exists
-if [ ! -d "data/pretrain" ]; then
-    echo "Error: Pretraining data not found. Please run scripts/download_data.sh first."
+if [ ! -d "data/sft" ]; then
+    echo "Error: SFT data not found. Please prepare SFT training data first."
     exit 1
 fi
 
@@ -282,7 +282,7 @@ echo "Total world size: $WORLD_SIZE"
 
 # Create output directory (only on master node)
 if [ $NODE_RANK -eq 0 ]; then
-    OUTPUT_DIR="outputs/pretrain_${MODEL_TYPE}_$(date +%Y%m%d_%H%M%S)"
+    OUTPUT_DIR="outputs/sft_${MODEL_TYPE}_$(date +%Y%m%d_%H%M%S)"
     mkdir -p "$OUTPUT_DIR"
     echo "Output directory: $OUTPUT_DIR"
     
@@ -294,7 +294,7 @@ else
     if [ -f "/tmp/qwen2_audio_output_dir" ]; then
         OUTPUT_DIR=$(cat /tmp/qwen2_audio_output_dir)
     else
-        OUTPUT_DIR="outputs/pretrain_${MODEL_TYPE}_$(date +%Y%m%d_%H%M%S)"
+        OUTPUT_DIR="outputs/sft_${MODEL_TYPE}_$(date +%Y%m%d_%H%M%S)"
     fi
     echo "Using output directory: $OUTPUT_DIR"
 fi
@@ -305,10 +305,11 @@ if [ -n "$HOSTFILE" ] && [ -f "$HOSTFILE" ]; then
     TRAINING_CMD="deepspeed \
         --hostfile=$HOSTFILE \
         --master_port=$MASTER_PORT \
+        --node_rank=$NODE_RANK \
         training/train.py \
         --config $CONFIG_FILE \
         --model_config $MODEL_CONFIG_FILE \
-        --stage pretrain"
+        --stage sft"
     echo "Using hostfile: $HOSTFILE"
 else
     # For multi-node training without hostfile, create a temporary one
@@ -324,7 +325,7 @@ else
         
         # TODO: Update this array with your actual node IPs/hostnames
         # These should match the nodes you're running the training on
-        ALL_NODES=("$MASTER_ADDR")  # Add all your nodes here, e.g., ("node1" "node2" "node3")
+        ALL_NODES=("v100_f178" "v100_f165" "v100")  # Add all your nodes here, e.g., ("node1" "node2" "node3")
         
         # Create hostfile with all nodes
         echo "Creating temporary hostfile: $TEMP_HOSTFILE"
@@ -339,10 +340,12 @@ else
         TRAINING_CMD="deepspeed \
             --hostfile=$TEMP_HOSTFILE \
             --master_port=$MASTER_PORT \
+            --node_rank=$NODE_RANK \
+            --no_ssh \
             training/train.py \
             --config $CONFIG_FILE \
             --model_config $MODEL_CONFIG_FILE \
-            --stage pretrain"
+            --stage sft"
         
         echo "Using temporary hostfile: $TEMP_HOSTFILE"
         echo ""
@@ -367,7 +370,7 @@ else
             training/train.py \
             --config $CONFIG_FILE \
             --model_config $MODEL_CONFIG_FILE \
-            --stage pretrain"
+            --stage sft"
     fi
 fi
 
@@ -382,24 +385,24 @@ echo "Training command:"
 echo "$TRAINING_CMD"
 
 # Create log file
-LOG_FILE="${OUTPUT_DIR}/pretrain_node${NODE_RANK}.log"
+LOG_FILE="${OUTPUT_DIR}/sft_node${NODE_RANK}.log"
 mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null || true
 echo "Logging to: $LOG_FILE"
 
 # Run training
-echo "Starting pretraining on node $NODE_RANK..."
+echo "Starting SFT training on node $NODE_RANK..."
 eval "$TRAINING_CMD" 2>&1 | tee "$LOG_FILE"
 
 # Check if training completed successfully
 if [ $? -eq 0 ]; then
-    echo "=== Pretraining completed successfully on node $NODE_RANK! ==="
+    echo "=== SFT training completed successfully on node $NODE_RANK! ==="
     if [ $NODE_RANK -eq 0 ]; then
         echo "Model saved to: $OUTPUT_DIR"
-        echo "Next step: Run SFT with the pretrained checkpoint"
-        echo "  bash scripts/train_sft_multinode.sh --model $MODEL_TYPE --resume $OUTPUT_DIR/pytorch_model.bin"
+        echo "Next step: Run DPO with the SFT checkpoint"
+        echo "  bash scripts/train_dpo_multinode.sh --model $MODEL_TYPE --resume $OUTPUT_DIR/pytorch_model.bin"
     fi
 else
-    echo "=== Pretraining failed on node $NODE_RANK! ==="
+    echo "=== SFT training failed on node $NODE_RANK! ==="
     echo "Check the log file: $LOG_FILE"
     exit 1
 fi 
