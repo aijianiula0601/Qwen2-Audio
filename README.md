@@ -1,706 +1,333 @@
-<p align="left">
-        <a href="README_CN.md">中文</a> &nbsp｜ &nbsp English&nbsp&nbsp
-</p>
-<br><br>
+# LlamaAudio: Multimodal Audio-Language Model Framework
 
-<p align="center">
-    <img src="https://qianwen-res.oss-cn-beijing.aliyuncs.com/assets/blog/qwenaudio/qwen2audio_logo.png" width="400"/>
-<p>
+LlamaAudio是一个基于Llama系列语言模型的多模态音频语言模型框架，能够理解和处理音频内容并生成相应的文本回应。本框架参考了Qwen2-Audio的架构设计，支持各种Llama模型（如Llama3.3-70B等）。
 
-<p align="center">
-Qwen2-Audio-7B <a href="https://modelscope.cn/models/qwen/Qwen2-Audio-7B">🤖 </a> | <a href="https://huggingface.co/Qwen/Qwen2-Audio-7B">🤗</a>&nbsp ｜ Qwen-Audio-7B-Instruct <a href="https://modelscope.cn/models/qwen/Qwen2-Audio-7B-Instruct">🤖 </a>| <a href="https://huggingface.co/Qwen/Qwen2-Audio-7B-Instruct">🤗</a>&nbsp ｜ Demo<a href="https://modelscope.cn/studios/qwen/Qwen2-Audio-Instruct-Demo"> 🤖</a> | <a href="https://huggingface.co/spaces/Qwen/Qwen2-Audio-Instruct-Demo">🤗</a>&nbsp
-<br>
-📑 <a href="https://arxiv.org/abs/2407.10759">Paper</a> &nbsp&nbsp | &nbsp&nbsp 📑 <a href="https://qwenlm.github.io/blog/qwen2-audio">Blog</a> &nbsp&nbsp | &nbsp&nbsp 💬 <a href="https://github.com/QwenLM/Qwen/blob/main/assets/wechat.png">WeChat (微信)</a>&nbsp&nbsp | &nbsp&nbsp <a href="https://discord.gg/CV4E9rpNSD">Discord</a>&nbsp&nbsp
-</p>
+## 🚀 主要特性
 
+- **🦙 支持Llama系列模型**: 兼容Llama3.3-70B等各种Llama模型
+- **🎵 音频理解能力**: 基于Whisper的强大音频编码器
+- **🎯 三阶段训练策略**: 参考Qwen2-Audio论文的渐进式训练方法
+- **📊 自动数据管理**: 自动下载和处理多种音频数据集
+- **⚡ 高效训练**: 支持LoRA、DeepSpeed、ZeRO等优化技术
+- **📊 分布式训练**: 支持多机多卡大规模训练
+- **📈 丰富监控**: 集成TensorBoard日志记录
+- **🔧 灵活配置**: 支持YAML配置文件和命令行参数
+- **🎮 交互式演示**: 内置Gradio网页界面测试模型
 
-We introduce the latest progress of Qwen-Audio, a large-scale audio-language model called Qwen2-Audio, which is capable of accepting various audio signal inputs and performing audio analysis or direct textual responses with regard to speech instructions. We introduce two distinct audio interaction modes:
+## 📋 系统要求
 
-* voice chat: users can freely engage in voice interactions with Qwen2-Audio without text input;
-* audio analysis: users could provide audio and text instructions for analysis during the interaction;
-
-**We've released two models of the Qwen2-Audio series: Qwen2-Audio-7B and Qwen2-Audio-7B-Instruct.**
-
-## Architecture
-
-The overview of three-stage training process of Qwen2-Audio.
-
-<p align="center">
-    <img src="assets/framework.png" width="80%"/>
-<p>
-
-## News and Updates
-* 2024.8.9 🎉 We released the checkpoints of both `Qwen2-Audio-7B` and `Qwen2-Audio-7B-Instruct` on ModelScope and Hugging Face.
-* 2024.7.15 🎉 We released the paper of **Qwen2-Audio**, introducing the relevant model structure, training methods, and model performance. Check our [report](https://arxiv.org/abs/2407.10759) for details!
-* 2023.11.30 🔥  We released the **Qwen-Audio** series.
-
-<br>
-
-## Evaluation
-We evaluated the Qwen2-Audio's abilities on 13 standard benchmarks as follows:
-<table><thead><tr><th>Task</th><th>Description</th><th>Dataset</th><th>Split</th><th>Metric</th></tr></thead><tbody><tr><td rowspan="4">ASR</td><td rowspan="4">Automatic Speech Recognition</td><td>Fleurs</td><td>dev | test</td><td rowspan="4">WER</td></tr><tr><td>Aishell2</td><td>test</td></tr><tr><td>Librispeech</td><td>dev | test</td></tr><tr><td>Common Voice</td><td>dev | test</td></tr><tr><td>S2TT</td><td>Speech-to-Text Translation</td><td>CoVoST2</td><td>test</td><td>BLEU </td></tr><tr><td>SER</td><td>Speech Emotion Recognition</td><td>Meld</td><td>test</td><td>ACC</td></tr><tr><td>VSC</td><td>Vocal Sound Classification</td><td>VocalSound</td><td>test</td><td>ACC</td></tr><tr><td rowspan="4"><a href="https://github.com/OFA-Sys/AIR-Bench">AIR-Bench</a><br></td><td>Chat-Benchmark-Speech</td><td>Fisher<br>SpokenWOZ<br>IEMOCAP<br>Common voice</td><td>dev | test</td><td>GPT-4 Eval</td></tr><tr><td>Chat-Benchmark-Sound</td><td>Clotho</td><td>dev | test</td><td>GPT-4 Eval</td></tr>
-<tr><td>Chat-Benchmark-Music</td><td>MusicCaps</td><td>dev | test</td><td>GPT-4 Eval</td></tr><tr><td>Chat-Benchmark-Mixed-Audio</td><td>Common voice<br>AudioCaps<br>MusicCaps</td><td>dev | test</td><td>GPT-4 Eval</td></tr></tbody></table>
-
-
-The below is the overal performance:
-<p align="center">
-    <img src="assets/radar_compare_qwen_audio.png" width="70%"/>
-<p>
-
-The details of evaluation are as follows:
-<br>
-<b>(Note: The evaluation results we present are based on the initial model of the original training framework. However, the scores showed some fluctuations after converting the framework to Huggingface. Here, we present our complete evaluation results, starting with the initial model results from the paper.)</b>
-
-<table><thead><tr><th rowspan="2">Task</th><th rowspan="2">Dataset</th><th rowspan="2">Model</th><th colspan="2">Performance</th></tr><tr><th>Metrics</th><th>Results</th></tr></thead><tbody><tr><td rowspan="15">ASR</td><td rowspan="7"><b>Librispeech</b><br>dev-clean | dev-other | <br>test-clean | test-other</td><td>SpeechT5</td><td rowspan="7">WER </td><td>2.1 | 5.5 | 2.4 | 5.8</td></tr><tr><td>SpeechNet</td><td>- | - | 30.7 | -</td></tr><tr><td>SLM-FT</td><td>- | - | 2.6 | 5.0</td></tr><tr><td>SALMONN</td><td>- | - | 2.1 | 4.9</td></tr><tr><td>SpeechVerse</td><td>- | - | 2.1 | 4.4</td></tr><tr><td>Qwen-Audio</td><td>1.8 | 4.0 | 2.0 | 4.2</td></tr><tr><td>Qwen2-Audio</td><td><b>1.3 | 3.4 | 1.6 | 3.6</b></td></tr><tr><td rowspan="2"><b>Common Voice 15</b> <br>en | zh | yue | fr</td><td>Whisper-large-v3</td><td rowspan="2">WER </td><td>9.3 | 12.8 | 10.9 | 10.8</td></tr><tr><td>Qwen2-Audio</td><td><b>8.6 | 6.9 | 5.9 | 9.6</b></td></tr>
-<tr><td rowspan="2"><b>Fleurs</b> <br>zh</td><td>Whisper-large-v3</td><td rowspan="2">WER </td><td>7.7</td></tr><tr><td>Qwen2-Audio</td><td><b>7.5</b></td></tr><tr><td rowspan="4"><b>Aishell2</b> <br>Mic | iOS | Android</td><td>MMSpeech-base</td><td rowspan="4">WER </td><td>4.5 | 3.9 | 4.0</td></tr><tr><td>Paraformer-large</td><td>- | <b>2.9</b> | -</td></tr><tr><td>Qwen-Audio</td><td>3.3 | 3.1 | 3.3</td></tr><tr><td>Qwen2-Audio</td><td><b>3.0</b> | 3.0 | <b>2.9</b></td></tr><tr><td rowspan="8">S2TT</td><td rowspan="5"><b>CoVoST2</b> <br>en-de | de-en | <br>en-zh | zh-en</td><td>SALMONN</td><td rowspan="5">BLEU </td><td>18.6 | - | 33.1 | -</td></tr><tr><td>SpeechLLaMA</td><td>- | 27.1 | - | 12.3</td></tr><tr><td>BLSP</td><td>14.1 | - | - | -</td></tr><tr><td>Qwen-Audio</td><td>25.1 | 33.9 | 41.5 | 15.7</td></tr><tr><td>Qwen2-Audio</td><td><b>29.9 | 35.2 | 45.2 | 24.4</b></td></tr>
-<tr><td rowspan="3"><b>CoVoST2</b> <br>es-en | fr-en | it-en |</td><td>SpeechLLaMA</td><td rowspan="3">BLEU </td><td>27.9 | 25.2 | 25.9</td></tr><tr><td>Qwen-Audio</td><td>39.7 | <b>38.5</b> | 36.0</td></tr><tr><td>Qwen2-Audio</td><td><b>40.0 | 38.5 | 36.3</b></td></tr><tr><td rowspan="3">SER</td><td rowspan="3"><b>Meld</b></td><td>WavLM-large</td><td rowspan="3">ACC </td><td>0.542</td></tr><tr><td>Qwen-Audio</td><td><b>0.557</b></td></tr><tr><td>Qwen2-Audio</td><td>0.553</td></tr><tr><td rowspan="4">VSC</td><td rowspan="4"><b>VocalSound</b></td><td>CLAP</td><td rowspan="4">ACC </td><td>0.4945</td></tr><tr><td>Pengi</td><td>0.6035</td></tr><tr><td>Qwen-Audio</td><td>0.9289</td></tr><tr><td>Qwen2-Audio</td><td><b>0.9392</b></td></tr>
-<tr><td>AIR-Bench <br></td><td><b>Chat Benchmark</b><br>Speech | Sound |<br> Music | Mixed-Audio</td><td>SALMONN<br>BLSP<br>Pandagpt<br>Macaw-LLM<br>SpeechGPT<br>Next-gpt<br>Qwen-Audio<br>Gemini-1.5-pro<br>Qwen2-Audio</td><td>GPT-4 </td><td>6.16 | 6.28 | 5.95 | 6.08<br>6.17 | 5.55 | 5.08 | 5.33<br>3.58 | 5.46 | 5.06 | 4.25<br>0.97 | 1.01 | 0.91 | 1.01<br>1.57 | 0.95 | 0.95 | 4.13<br>3.86 | 4.76 | 4.18 | 4.13<br>6.47 | 6.95 | 5.52 | 6.08<br>6.97 | 5.49 | 5.06 | 5.27<br><b>7.18 | 6.99 | 6.79 | 6.77</b></td></tr></tbody></table>
-
-<b>(Second is after converting huggingface)</b>
-
-<table><thead><tr><th rowspan="2">Task</th><th rowspan="2">Dataset</th><th rowspan="2">Model</th><th colspan="2">Performance</th></tr><tr><th>Metrics</th><th>Results</th></tr></thead><tbody><tr><td rowspan="15">ASR</td><td rowspan="7"><b>Librispeech</b><br>dev-clean | dev-other | <br>test-clean | test-other</td><td>SpeechT5</td><td rowspan="7">WER </td><td>2.1 | 5.5 | 2.4 | 5.8</td></tr><tr><td>SpeechNet</td><td>- | - | 30.7 | -</td></tr><tr><td>SLM-FT</td><td>- | - | 2.6 | 5.0</td></tr><tr><td>SALMONN</td><td>- | - | 2.1 | 4.9</td></tr><tr><td>SpeechVerse</td><td>- | - | 2.1 | 4.4</td></tr><tr><td>Qwen-Audio</td><td>1.8 | 4.0 | 2.0 | 4.2</td></tr><tr><td>Qwen2-Audio</td><td><b>1.7 | 3.6 | 1.7 | 4.0</b></td></tr><tr><td rowspan="2"><b>Common Voice 15</b> <br>en | zh | yue | fr</td><td>Whisper-large-v3</td><td rowspan="2">WER </td><td>9.3 | 12.8 | 10.9 | 10.8</td></tr><tr><td>Qwen2-Audio</td><td><b>8.7 | 6.5 | 5.9 | 9.6</b></td></tr>
-<tr><td rowspan="2"><b>Fleurs</b> <br>zh</td><td>Whisper-large-v3</td><td rowspan="2">WER </td><td>7.7</td></tr><tr><td>Qwen2-Audio</td><td><b>7.0</b></td></tr><tr><td rowspan="4"><b>Aishell2</b> <br>Mic | iOS | Android</td><td>MMSpeech-base</td><td rowspan="4">WER </td><td>4.5 | 3.9 | 4.0</td></tr><tr><td>Paraformer-large</td><td>- | <b>2.9</b> | -</td></tr><tr><td>Qwen-Audio</td><td>3.3 | 3.1 | 3.3</td></tr><tr><td>Qwen2-Audio</td><td><b>3.2</b> | 3.1 | <b>2.9</b></td></tr><tr><td rowspan="8">S2TT</td><td rowspan="5"><b>CoVoST2</b> <br>en-de | de-en | <br>en-zh | zh-en</td><td>SALMONN</td><td rowspan="5">BLEU </td><td>18.6 | - | 33.1 | -</td></tr><tr><td>SpeechLLaMA</td><td>- | 27.1 | - | 12.3</td></tr><tr><td>BLSP</td><td>14.1 | - | - | -</td></tr><tr><td>Qwen-Audio</td><td>25.1 | <b>33.9</b> | 41.5 | 15.7</td></tr><tr><td>Qwen2-Audio</td><td><b>29.6</b> | 33.6 | <b>45.6</b> | <b>24.0</b></td></tr>
-<tr><td rowspan="3"><b>CoVoST2</b> <br>es-en | fr-en | it-en |</td><td>SpeechLLaMA</td><td rowspan="3">BLEU </td><td>27.9 | 25.2 | 25.9</td></tr><tr><td>Qwen-Audio</td><td><b>39.7 | 38.5 | 36.0</b></td></tr><tr><td>Qwen2-Audio</td><td>38.7 | 37.2 | 35.2</td></tr><tr><td rowspan="3">SER</td><td rowspan="3"><b>Meld</b></td><td>WavLM-large</td><td rowspan="3">ACC </td><td>0.542</td></tr><tr><td>Qwen-Audio</td><td><b>0.557</b></td></tr><tr><td>Qwen2-Audio</td><td>0.535</td></tr><tr><td rowspan="4">VSC</td><td rowspan="4"><b>VocalSound</b></td><td>CLAP</td><td rowspan="4">ACC </td><td>0.4945</td></tr><tr><td>Pengi</td><td>0.6035</td></tr><tr><td>Qwen-Audio</td><td>0.9289</td></tr><tr><td>Qwen2-Audio</td><td><b>0.9395</b></td></tr>
-<tr><td>AIR-Bench <br></td><td><b>Chat Benchmark</b><br>Speech | Sound |<br> Music | Mixed-Audio</td><td>SALMONN<br>BLSP<br>Pandagpt<br>Macaw-LLM<br>SpeechGPT<br>Next-gpt<br>Qwen-Audio<br>Gemini-1.5-pro<br>Qwen2-Audio</td><td>GPT-4 </td><td>6.16 | 6.28 | 5.95 | 6.08<br>6.17 | 5.55 | 5.08 | 5.33<br>3.58 | 5.46 | 5.06 | 4.25<br>0.97 | 1.01 | 0.91 | 1.01<br>1.57 | 0.95 | 0.95 | 4.13<br>3.86 | 4.76 | 4.18 | 4.13<br>6.47 | <b>6.95</b> | 5.52 | 6.08<br>6.97 | 5.49 | 5.06 | 5.27<br><b>7.24</b> | 6.83 | <b>6.73</b> | <b>6.42</b></td></tr></tbody></table>
-
-
-We have provided **all** evaluation scripts to reproduce our results. Please refer to [eval_audio/EVALUATION.md](eval_audio/EVALUATION.md) for details.
-
-## Requirements
-The code of Qwen2-Audio has been in the latest Hugging face transformers and we advise you to build from source with command `pip install git+https://github.com/huggingface/transformers`, or you might encounter the following error:
-```
-KeyError: 'qwen2-audio'
-```
-
-## Quickstart
-Below, we provide simple examples to show how to use Qwen2-Audio and Qwen2-Audio-Instruct with 🤗 Transformers.
-Before running the code, make sure you have setup the environment and installed the required packages. Make sure you meet the above requirements, and then install the dependent libraries.
-Now you can start with ModelScope or Transformers. Qwen2-Audio models currently perform best with audio clips under 30 seconds.
-#### 🤗 Transformers
-In the following, we demonstrate how to use `Qwen2-Audio-7B-Instruct` for the inference, supporting both voice chat and audio analysis modes. Note that we have used the ChatML format for dialog, in this demo we show how to leverage `apply_chat_template` for this purpose.
-
-##### Voice Chat Inference
-In the voice chat mode, users can freely engage in voice interactions with Qwen2-Audio without text input:
-```python
-from io import BytesIO
-from urllib.request import urlopen
-import librosa
-from transformers import Qwen2AudioForConditionalGeneration, AutoProcessor
-
-processor = AutoProcessor.from_pretrained("Qwen/Qwen2-Audio-7B-Instruct")
-model = Qwen2AudioForConditionalGeneration.from_pretrained("Qwen/Qwen2-Audio-7B-Instruct", device_map="auto")
-
-conversation = [
-    {"role": "user", "content": [
-        {"type": "audio", "audio_url": "https://qianwen-res.oss-cn-beijing.aliyuncs.com/Qwen2-Audio/audio/guess_age_gender.wav"},
-    ]},
-    {"role": "assistant", "content": "Yes, the speaker is female and in her twenties."},
-    {"role": "user", "content": [
-        {"type": "audio", "audio_url": "https://qianwen-res.oss-cn-beijing.aliyuncs.com/Qwen2-Audio/audio/translate_to_chinese.wav"},
-    ]},
-]
-text = processor.apply_chat_template(conversation, add_generation_prompt=True, tokenize=False)
-audios = []
-for message in conversation:
-    if isinstance(message["content"], list):
-        for ele in message["content"]:
-            if ele["type"] == "audio":
-                audios.append(librosa.load(
-                    BytesIO(urlopen(ele['audio_url']).read()), 
-                    sr=processor.feature_extractor.sampling_rate)[0]
-                )
-
-inputs = processor(text=text, audios=audios, return_tensors="pt", padding=True)
-inputs.input_ids = inputs.input_ids.to("cuda")
-
-generate_ids = model.generate(**inputs, max_length=256)
-generate_ids = generate_ids[:, inputs.input_ids.size(1):]
-
-response = processor.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
-```
-
-##### Audio Analysis Inference
-In the audio analysis, users could provide both audio and text instructions for analysis:
-```python
-from io import BytesIO
-from urllib.request import urlopen
-import librosa
-from transformers import Qwen2AudioForConditionalGeneration, AutoProcessor
-
-processor = AutoProcessor.from_pretrained("Qwen/Qwen2-Audio-7B-Instruct")
-model = Qwen2AudioForConditionalGeneration.from_pretrained("Qwen/Qwen2-Audio-7B-Instruct", device_map="auto")
-
-conversation = [
-    {'role': 'system', 'content': 'You are a helpful assistant.'}, 
-    {"role": "user", "content": [
-        {"type": "audio", "audio_url": "https://qianwen-res.oss-cn-beijing.aliyuncs.com/Qwen2-Audio/audio/glass-breaking-151256.mp3"},
-        {"type": "text", "text": "What's that sound?"},
-    ]},
-    {"role": "assistant", "content": "It is the sound of glass shattering."},
-    {"role": "user", "content": [
-        {"type": "text", "text": "What can you do when you hear that?"},
-    ]},
-    {"role": "assistant", "content": "Stay alert and cautious, and check if anyone is hurt or if there is any damage to property."},
-    {"role": "user", "content": [
-        {"type": "audio", "audio_url": "https://qianwen-res.oss-cn-beijing.aliyuncs.com/Qwen2-Audio/audio/1272-128104-0000.flac"},
-        {"type": "text", "text": "What does the person say?"},
-    ]},
-]
-text = processor.apply_chat_template(conversation, add_generation_prompt=True, tokenize=False)
-audios = []
-for message in conversation:
-    if isinstance(message["content"], list):
-        for ele in message["content"]:
-            if ele["type"] == "audio":
-                audios.append(
-                    librosa.load(
-                        BytesIO(urlopen(ele['audio_url']).read()), 
-                        sr=processor.feature_extractor.sampling_rate)[0]
-                )
-
-inputs = processor(text=text, audios=audios, return_tensors="pt", padding=True)
-inputs.input_ids = inputs.input_ids.to("cuda")
-
-generate_ids = model.generate(**inputs, max_length=256)
-generate_ids = generate_ids[:, inputs.input_ids.size(1):]
-
-response = processor.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
-```
-
-##### Batch Inference
-We also support batch inference:
-```python
-from io import BytesIO
-from urllib.request import urlopen
-import librosa
-from transformers import Qwen2AudioForConditionalGeneration, AutoProcessor
-
-processor = AutoProcessor.from_pretrained("Qwen/Qwen2-Audio-7B-Instruct")
-model = Qwen2AudioForConditionalGeneration.from_pretrained("Qwen/Qwen2-Audio-7B-Instruct", device_map="auto")
-
-conversation1 = [
-    {"role": "user", "content": [
-        {"type": "audio", "audio_url": "https://qianwen-res.oss-cn-beijing.aliyuncs.com/Qwen2-Audio/audio/glass-breaking-151256.mp3"},
-        {"type": "text", "text": "What's that sound?"},
-    ]},
-    {"role": "assistant", "content": "It is the sound of glass shattering."},
-    {"role": "user", "content": [
-        {"type": "audio", "audio_url": "https://qianwen-res.oss-cn-beijing.aliyuncs.com/Qwen2-Audio/audio/f2641_0_throatclearing.wav"},
-        {"type": "text", "text": "What can you hear?"},
-    ]}
-]
-
-conversation2 = [
-    {"role": "user", "content": [
-        {"type": "audio", "audio_url": "https://qianwen-res.oss-cn-beijing.aliyuncs.com/Qwen2-Audio/audio/1272-128104-0000.flac"},
-        {"type": "text", "text": "What does the person say?"},
-    ]},
-]
-
-conversations = [conversation1, conversation2]
-
-text = [processor.apply_chat_template(conversation, add_generation_prompt=True, tokenize=False) for conversation in conversations]
-
-audios = []
-for conversation in conversations:
-    for message in conversation:
-        if isinstance(message["content"], list):
-            for ele in message["content"]:
-                if ele["type"] == "audio":
-                    audios.append(
-                        librosa.load(
-                            BytesIO(urlopen(ele['audio_url']).read()), 
-                            sr=processor.feature_extractor.sampling_rate)[0]
-                    )
-
-inputs = processor(text=text, audios=audios, return_tensors="pt", padding=True)
-inputs['input_ids'] = inputs['input_ids'].to("cuda")
-inputs.input_ids = inputs.input_ids.to("cuda")
-
-generate_ids = model.generate(**inputs, max_length=256)
-generate_ids = generate_ids[:, inputs.input_ids.size(1):]
-
-response = processor.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)
-```
-Running Qwen2-Audio pretrained base model is also simple.
-```python
-from io import BytesIO
-from urllib.request import urlopen
-import librosa
-from transformers import AutoProcessor, Qwen2AudioForConditionalGeneration
-
-model = Qwen2AudioForConditionalGeneration.from_pretrained("Qwen/Qwen2-Audio-7B" ,trust_remote_code=True)
-processor = AutoProcessor.from_pretrained("Qwen/Qwen2-Audio-7B" ,trust_remote_code=True)
-
-prompt = "<|audio_bos|><|AUDIO|><|audio_eos|>Generate the caption in English:"
-url = "https://qianwen-res.oss-cn-beijing.aliyuncs.com/Qwen-Audio/glass-breaking-151256.mp3"
-audio, sr = librosa.load(BytesIO(urlopen(url).read()), sr=processor.feature_extractor.sampling_rate)
-inputs = processor(text=prompt, audios=audio, return_tensors="pt")
-
-generated_ids = model.generate(**inputs, max_length=256)
-generated_ids = generated_ids[:, inputs.input_ids.size(1):]
-response = processor.batch_decode(generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
-```
-#### 🤖 ModelScope
-We strongly advise users especially those in mainland China to use ModelScope. `snapshot_download` can help you solve issues concerning downloading checkpoints.
-## Demo
-### Web UI
-We provide code for users to build a web UI demo. Before you start, make sure you install the following packages:
-```
-pip install -r requirements_web_demo.txt
-```
-Then run the command below and click on the generated link:
-```
-python demo/web_demo_audio.py
-```
-<br>
-
-## demos 
-More impressive cases will be updated on our blog at [Qwen's blog](https://qwenlm.github.io/blog/qwen2-audio).
-
-## We Are Hiring
-
-If you are interested in joining us as full-time or intern, please contact us at `qwen_audio@list.alibaba-inc.com`.
-<br>
-
-## License Agreement
-
-Check the license of each model inside its HF repo. It is NOT necessary for you to submit a request for commercial usage.
-<br>
-
-## Citation
-
-If you find our paper and code useful in your research, please consider giving a star :star: and citation :pencil: :)
-
-```BibTeX
-@article{Qwen-Audio,
-  title={Qwen-Audio: Advancing Universal Audio Understanding via Unified Large-Scale Audio-Language Models},
-  author={Chu, Yunfei and Xu, Jin and Zhou, Xiaohuan and Yang, Qian and Zhang, Shiliang and Yan, Zhijie  and Zhou, Chang and Zhou, Jingren},
-  journal={arXiv preprint arXiv:2311.07919},
-  year={2023}
-}
-```
-
-```BibTeX
-@article{Qwen2-Audio,
-  title={Qwen2-Audio Technical Report},
-  author={Chu, Yunfei and Xu, Jin and Yang, Qian and Wei, Haojie and Wei, Xipin and Guo,  Zhifang and Leng, Yichong and Lv, Yuanjun and He, Jinzheng and Lin, Junyang and Zhou, Chang and Zhou, Jingren},
-  journal={arXiv preprint arXiv:2407.10759},
-  year={2024}
-}
-```
-<br>
-
-## Contact Us
-
-If you are interested to leave a message to either our research team or product team, feel free to send an email to `qianwen_opensource@alibabacloud.com`.
-
-# Qwen2-Audio Implementation
-
-A complete implementation of Qwen2-Audio: Large Language Model for Audio Understanding and Generation, supporting multiple LLM backbones and DeepSpeed training.
-
-## 🚀 Features
-
-- **Multi-Model Support**: Qwen2-7B/70B, LLaMA3-8B, and extensible to other LLMs
-- **Three-Stage Training**: Pretraining, Supervised Fine-tuning (SFT), and Direct Preference Optimization (DPO)
-- **DeepSpeed Integration**: Optimized for large-scale training with ZeRO optimization
-- **Flexible Data Pipeline**: Support for Common Voice, LibriSpeech, and custom datasets
-- **Comprehensive Evaluation**: Built-in evaluation suite for multiple audio tasks
-- **Production Ready**: Complete training pipeline with monitoring and checkpointing
-
-## 📋 Requirements
-
-### System Requirements
 - Python 3.8+
-- CUDA 11.8+ (for GPU training)
-- 8+ GPUs recommended for 7B models
-- 16+ GPUs recommended for 70B models
+- CUDA 11.7+ (推荐12.0+)
+- 至少16GB GPU内存（推荐32GB+用于大型模型）
+- 对于Llama3.3-70B模型，推荐使用多卡或CPU offloading
 
-### Installation
+## 🛠️ 安装
 
+1. **克隆项目**
 ```bash
-# Clone the repository
-git clone <this-repo>
-cd Qwen2-Audio
+git clone <your-repo-url>
+cd llama_audio
+```
 
-# Install dependencies
+2. **安装依赖**
+```bash
 pip install -r requirements.txt
-
-# Install additional dependencies for evaluation
-pip install jiwer sacrebleu
 ```
 
-## 🗂 Project Structure
+3. **可选：安装优化组件**
+```bash
+# Flash Attention (推荐，提高训练效率)
+pip install flash-attn
 
-```
-Qwen2-Audio/
-├── configs/                    # Configuration files
-│   ├── base_config.yaml       # Base training configuration
-│   ├── deepspeed_config.json  # DeepSpeed optimization config
-│   ├── deepspeed_70b_config.json  # Enhanced config for 70B models
-│   └── models/                # Model-specific configurations
-│       ├── qwen2_7b.yaml
-│       ├── qwen2_70b.yaml
-│       └── llama3_8b.yaml
-├── training/                  # Core training modules
-│   ├── model.py              # Qwen2-Audio model implementation
-│   ├── dataset.py            # Dataset and data loading
-│   ├── train.py              # Main training script
-│   └── dpo_trainer.py        # DPO training implementation
-├── scripts/                   # Shell scripts
-│   ├── download_data.sh      # Data download and preparation
-│   ├── train_pretrain.sh     # Pretraining stage
-│   ├── train_sft.sh          # SFT stage
-│   ├── train_dpo.sh          # DPO stage
-│   └── train_full_pipeline.sh # Complete training pipeline
-├── demo/                      # Inference and demo
-│   └── inference.py          # Interactive inference script
-├── evaluation/                # Evaluation tools
-│   └── evaluate.py           # Model evaluation script
-├── tools/                     # Utility tools
-│   └── data_converter.py     # Dataset conversion utilities
-└── outputs/                   # Training outputs and checkpoints
+# xFormers (内存优化)
+pip install xformers
+
+# BitsAndBytes (量化支持)
+pip install bitsandbytes
 ```
 
-## 🚀 Quick Start
+## 📁 项目结构
 
-### 1. Data Preparation
+```
+llama_audio/
+├── llama_audio/              # 主模块
+│   ├── models/               # 模型定义
+│   │   ├── audio_encoder.py
+│   │   ├── multimodal_connector.py
+│   │   └── llama_audio_model.py
+│   └── training/             # 训练模块
+│       ├── trainer.py
+│       ├── data_loader.py
+│       └── utils.py
+├── configs/                  # 配置文件
+│   ├── stage1_training_config.yaml    # 阶段1配置
+│   ├── stage2_training_config.yaml    # 阶段2配置
+│   ├── stage3_training_config.yaml    # 阶段3配置
+│   ├── deepspeed_stage1_config.json   # DeepSpeed阶段1
+│   ├── deepspeed_stage2_config.json   # DeepSpeed阶段2
+│   └── deepspeed_stage3_config.json   # DeepSpeed阶段3
+├── scripts/                  # 训练脚本
+│   ├── train.py              # 主训练脚本
+│   ├── train_all_stages.sh   # 完整训练管道
+│   ├── train_stage1.sh       # 阶段1训练
+│   ├── train_stage2.sh       # 阶段2训练
+│   ├── train_stage3.sh       # 阶段3训练
+│   ├── interactive_demo.py   # 交互式演示
+│   ├── evaluate.py           # 模型评估
+│   └── data_download/        # 数据下载脚本
+│       ├── download_stage1_data.sh
+│       ├── download_stage2_data.sh
+│       └── download_stage3_data.sh
+├── docs/                     # 文档
+│   └── MULTI_STAGE_TRAINING.md
+├── requirements.txt
+└── README.md
+```
 
-Download and prepare training data:
+## 🎯 快速开始
+
+### 多阶段训练（推荐方式）
+
+LlamaAudio采用**三阶段渐进式训练策略**，参考Qwen2-Audio论文设计：
+
+1. **Stage 1**: 音频-文本对齐（语音识别）- 6-12小时
+2. **Stage 2**: 音频理解与描述 - 12-24小时  
+3. **Stage 3**: 指令跟随与对话 - 8-16小时
+
+#### Option 1: 一键完整训练（推荐）
+```bash
+# 自动运行全部三个阶段
+bash scripts/train_all_stages.sh --auto_continue
+
+# 或手动确认每个阶段
+bash scripts/train_all_stages.sh
+```
+
+#### Option 2: 分阶段训练
+```bash
+# 阶段1：音频-文本对齐
+bash scripts/data_download/download_stage1_data.sh
+bash scripts/train_stage1.sh
+
+# 阶段2：音频理解
+bash scripts/data_download/download_stage2_data.sh
+bash scripts/train_stage2.sh
+
+# 阶段3：指令跟随
+bash scripts/data_download/download_stage3_data.sh
+bash scripts/train_stage3.sh
+```
+
+#### 多机分布式训练
+```bash
+# 多机多卡训练（推荐用于生产）
+bash scripts/train_all_stages.sh \
+    --num_nodes 4 \
+    --node_rank 0 \
+    --master_addr "192.168.1.100" \
+    --auto_continue
+```
+
+### 训练数据集
+
+训练过程自动下载以下数据集：
+
+**Stage 1 (语音识别)**:
+- LibriSpeech (~280K samples, ~50GB)
+- CommonVoice (~150K samples, ~15GB)
+
+**Stage 2 (音频理解)**:
+- AudioCaps (~230K samples, ~8GB)
+- Clotho (~24K samples, ~2GB)  
+- WavCaps (~400K samples, ~50GB)
+- FSD50K (~51K samples, ~25GB)
+
+**Stage 3 (指令跟随)**:
+- 自动生成的指令对话数据 (~405K samples)
+
+### 监控训练进度
 
 ```bash
-# Download sample datasets (Common Voice, LibriSpeech)
-bash scripts/download_data.sh
+# 启动TensorBoard监控
+tensorboard --logdir outputs/ --port 6006
 
-# Or convert your custom dataset
-python tools/data_converter.py --dataset custom --data_dir /path/to/your/data
+# 查看特定阶段
+tensorboard --logdir outputs/stage1_alignment/tensorboard --port 6007
 ```
 
-### 2. Training
-
-#### Option A: Complete Pipeline (Recommended)
-
-Run all three stages automatically:
+### 测试训练结果
 
 ```bash
-# Train Qwen2-7B with default settings
-bash scripts/train_full_pipeline.sh --model qwen2_7b --gpus 8
+# 启动交互式演示
+python scripts/interactive_demo.py \
+    --model_path outputs/stage3_conversation/final_model \
+    --port 7860 --share
 
-# Train Qwen2-70B (requires more resources)
-bash scripts/train_full_pipeline.sh --model qwen2_70b --gpus 16
-
-# Train LLaMA3-8B
-bash scripts/train_full_pipeline.sh --model llama3_8b --gpus 8
-
-# Train only specific stages
-bash scripts/train_full_pipeline.sh --model qwen2_7b --pretrain-only
-bash scripts/train_full_pipeline.sh --model qwen2_7b --sft-only --skip-pretrain
-bash scripts/train_full_pipeline.sh --model qwen2_7b --dpo-only --skip-pretrain --skip-sft
+# 模型评估
+python scripts/evaluate.py \
+    --model_path outputs/stage3_conversation/final_model
 ```
 
-#### Option B: Individual Stages
+### 传统训练方式（可选）
 
-Run training stages separately:
+如果您想使用传统的单阶段训练：
 
-```bash
-# Stage 1: Pretraining
-bash scripts/train_pretrain.sh --model qwen2_7b --gpus 8
+#### 1. 准备数据
 
-# Stage 2: Supervised Fine-tuning
-bash scripts/train_sft.sh --model qwen2_7b --gpus 8 --pretrain_checkpoint outputs/pretrain_qwen2_7b_*/pytorch_model.bin
-
-# Stage 3: Direct Preference Optimization
-bash scripts/train_dpo.sh --model qwen2_7b --gpus 8 --sft_checkpoint outputs/sft_qwen2_7b_*/pytorch_model.bin
-```
-
-#### Option C: Python Training Script
-
-Use the Python training script directly:
-
-```bash
-# Pretraining
-python training/train.py \
-    --config configs/base_config.yaml \
-    --model_config configs/models/qwen2_7b.yaml \
-    --stage pretrain \
-    --output_dir outputs/pretrain_qwen2_7b
-
-# SFT
-python training/train.py \
-    --config configs/base_config.yaml \
-    --model_config configs/models/qwen2_7b.yaml \
-    --stage sft \
-    --pretrain_checkpoint outputs/pretrain_qwen2_7b/pytorch_model.bin \
-    --output_dir outputs/sft_qwen2_7b
-
-# DPO
-python training/train.py \
-    --config configs/base_config.yaml \
-    --model_config configs/models/qwen2_7b.yaml \
-    --stage dpo \
-    --sft_checkpoint outputs/sft_qwen2_7b/pytorch_model.bin \
-    --output_dir outputs/dpo_qwen2_7b
-```
-
-### 3. Inference
-
-Test your trained model:
-
-```bash
-# Interactive mode
-python demo/inference.py --model_path outputs/dpo_qwen2_7b_* --interactive
-
-# Single audio transcription
-python demo/inference.py \
-    --model_path outputs/dpo_qwen2_7b_* \
-    --audio_path your_audio.wav \
-    --mode transcribe
-
-# Audio chat
-python demo/inference.py \
-    --model_path outputs/dpo_qwen2_7b_* \
-    --audio_path your_audio.wav \
-    --mode chat \
-    --instruction "What do you hear in this audio?"
-
-# Audio analysis
-python demo/inference.py \
-    --model_path outputs/dpo_qwen2_7b_* \
-    --audio_path your_audio.wav \
-    --mode analyze
-```
-
-### 4. Evaluation
-
-Evaluate your model on standard benchmarks:
-
-```bash
-# Prepare test data (create test_data.json with your evaluation samples)
-python evaluation/evaluate.py \
-    --model_path outputs/dpo_qwen2_7b_* \
-    --test_data test_data.json \
-    --tasks transcription qa classification generation \
-    --output_dir evaluation_results \
-    --save_predictions
-```
-
-## ⚙️ Configuration
-
-### Model Configuration
-
-Edit `configs/models/` files to customize model parameters:
-
-- `llm_name`: Base LLM model path
-- `audio_projector_config`: Projector architecture settings
-- `freeze_audio_encoder`: Whether to freeze the audio encoder
-- `freeze_llm`: Whether to freeze the LLM backbone
-
-### Training Configuration
-
-Edit `configs/base_config.yaml` to customize training:
-
-- `training.batch_size`: Training batch size
-- `training.learning_rate`: Learning rate settings
-- `training.num_epochs`: Number of training epochs
-- `datasets`: Dataset configurations and paths
-- `hardware.num_gpus`: Number of GPUs to use
-
-### DeepSpeed Configuration
-
-For 70B models or memory optimization, use the enhanced DeepSpeed config:
-
-```yaml
-# In your training config
-deepspeed_config_path: "configs/deepspeed_70b_config.json"
-```
-
-## 📊 Data Format
-
-### Training Data Format
-
-Your training data should be in JSON format:
-
-```json
-[
-  {
-    "audio_path": "path/to/audio.wav",
-    "text": "Transcription or response text",
-    "speaker_id": "optional_speaker_id",
-    "metadata": "optional_additional_info"
-  }
-]
-```
-
-### Multi-task Data Format
-
-For DPO training, include preference pairs:
-
-```json
-[
-  {
-    "audio_path": "path/to/audio.wav", 
-    "chosen": "Better response text",
-    "rejected": "Worse response text",
-    "instruction": "Optional instruction"
-  }
-]
-```
-
-### Evaluation Data Format
-
+数据格式支持JSONL，每行包含：
 ```json
 {
-  "transcription": [
-    {
-      "audio_path": "path/to/audio.wav",
-      "reference": "Ground truth transcription"
-    }
-  ],
-  "qa": [
-    {
-      "audio_path": "path/to/audio.wav", 
-      "question": "What do you hear?",
-      "answer": "Expected answer"
-    }
-  ],
-  "classification": [
-    {
-      "audio_path": "path/to/audio.wav",
-      "label": "speech"
-    }
-  ],
-  "classes": ["speech", "music", "sound", "noise"]
+  "audio_path": "path/to/audio.wav",
+  "instruction": "请描述这段音频",
+  "output": "这是一段包含钢琴演奏的音乐..."
 }
 ```
 
-## 🔧 Advanced Usage
-
-### Custom Datasets
-
-Convert your dataset to the required format:
-
+#### 2. 配置和训练
 ```bash
-# Common Voice
-python tools/data_converter.py \
-    --dataset common_voice \
-    --data_dir /path/to/common_voice \
-    --split train
+# 编辑配置文件
+vim configs/training_config.yaml
 
-# LibriSpeech
-python tools/data_converter.py \
-    --dataset librispeech \
-    --data_dir /path/to/librispeech \
-    --split train-clean-100
-
-# Custom dataset with metadata file
-python tools/data_converter.py \
-    --dataset custom \
-    --data_dir /path/to/audio/files \
-    --metadata_file metadata.csv
+# 开始训练
+python scripts/train.py --config configs/training_config.yaml
 ```
 
-### Custom Model Architecture
+**详细的多阶段训练说明请参考：[多阶段训练指南](docs/MULTI_STAGE_TRAINING.md)**
 
-Add your custom LLM by:
+## ⚙️ 高级配置
 
-1. Creating a new config file in `configs/models/`
-2. Specifying the `llm_name` and `llm_type` 
-3. Adjusting the `audio_projector_config` if needed
+### DeepSpeed配置
 
-### Monitoring Training
-
-Training logs and metrics are automatically saved:
-
-- **Weights & Biases**: Set `WANDB_PROJECT` environment variable
-- **TensorBoard**: Logs saved to `outputs/tensorboard/`
-- **Console logs**: Real-time training progress
-
-View training progress:
+对于大型模型（如Llama3.3-70B），推荐使用ZeRO Stage 3：
 
 ```bash
-# TensorBoard
-tensorboard --logdir outputs/tensorboard
-
-# Check training logs
-tail -f outputs/pipeline_*/pipeline.log
+# 使用ZeRO Stage 3配置
+bash scripts/run_distributed_training.sh \
+    --deepspeed configs/deepspeed_zero3_config.json \
+    --model_name "meta-llama/Llama-3.3-70B-Instruct"
 ```
 
-## 🐛 Troubleshooting
+### LoRA微调
 
-### Common Issues
+在配置文件中启用LoRA以减少内存使用：
 
-1. **Out of Memory Errors**
-   - Reduce `batch_size` in config
-   - Use gradient checkpointing
-   - Use DeepSpeed ZeRO-3 optimization
-   - For 70B models, use `configs/deepspeed_70b_config.json`
+```yaml
+model:
+  use_lora: true
+  lora_rank: 64
+  lora_alpha: 16
+  freeze_llm: false  # 可以设为false允许LoRA训练
+```
 
-2. **CUDA Errors**
-   - Check CUDA version compatibility
-   - Verify GPU memory availability
-   - Try reducing model size or batch size
+### CPU Offloading
 
-3. **Data Loading Issues**
-   - Verify audio file paths in dataset files
-   - Check audio file formats (supported: wav, mp3, flac)
-   - Ensure proper sampling rate (16kHz recommended)
+对于内存受限的环境，使用CPU offloading：
 
-4. **Convergence Issues**
-   - Adjust learning rate
-   - Check data quality and distribution
-   - Verify loss scaling for mixed precision
-
-### Performance Optimization
-
-- **For 7B models**: Use 8 GPUs with batch size 32-64
-- **For 70B models**: Use 16+ GPUs with batch size 16-32
-- **Memory optimization**: Enable CPU offloading in DeepSpeed config
-- **Speed optimization**: Use bf16 instead of fp16 when available
-
-## 📝 Citation
-
-If you use this implementation, please cite the original Qwen2-Audio paper:
-
-```bibtex
-@article{qwen2audio2024,
-  title={Qwen2-Audio: Large Language Model for Audio Understanding and Generation},
-  author={...},
-  journal={arXiv preprint arXiv:...},
-  year={2024}
+```json
+// deepspeed_zero3_config.json
+{
+  "zero_optimization": {
+    "stage": 3,
+    "offload_optimizer": {
+      "device": "cpu"
+    },
+    "offload_param": {
+      "device": "cpu"
+    }
+  }
 }
 ```
 
-## 📄 License
+## 📊 监控训练
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+### TensorBoard
+```bash
+tensorboard --logdir outputs/llama_audio_training/tensorboard
+```
 
-## 🤝 Contributing
+### 训练日志
+训练日志会保存在输出目录下的 `training.log` 文件中。
 
-Contributions are welcome! Please:
+## 🎮 模型使用
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+训练完成后，可以这样使用模型：
 
-## 📞 Support
+```python
+from llama_audio.models.llama_audio_model import LlamaAudioModel
 
-For questions and support:
+# 加载训练好的模型
+model = LlamaAudioModel.from_pretrained("outputs/llama_audio_training/final_model")
 
-- Create an issue in this repository
-- Check the troubleshooting section
-- Review the configuration examples
+# 音频理解
+import librosa
+audio, sr = librosa.load("audio.wav", sr=16000)
+audio_features = model.audio_processor(audio, sampling_rate=sr, return_tensors="pt")
 
-## 🎯 Roadmap
+# 生成回应
+response = model.generate(
+    audio_features=audio_features.input_features,
+    max_new_tokens=256,
+    do_sample=True,
+    temperature=0.7
+)
 
-- [ ] Support for more LLM backbones (Mistral, Gemma, etc.)
-- [ ] Streaming inference capability
-- [ ] Model quantization and compression
-- [ ] Web interface for easy interaction
-- [ ] Integration with popular audio processing libraries
-- [ ] Multi-modal training (audio + vision)
+print(model.tokenizer.decode(response[0], skip_special_tokens=True))
+```
+
+## 🛠️ 故障排除
+
+### 内存不足
+1. 减少批次大小：`batch_size: 2`
+2. 启用梯度累积：`gradient_accumulation_steps: 8`
+3. 使用DeepSpeed ZeRO Stage 3
+4. 启用CPU offloading
+
+### 多卡同步问题
+1. 检查NCCL环境：`export NCCL_DEBUG=INFO`
+2. 确保所有节点网络连通
+3. 检查防火墙设置
+
+### 模型加载失败
+1. 确保有Hugging Face访问权限
+2. 设置代理：`export HF_ENDPOINT=https://hf-mirror.com`
+3. 本地下载模型文件
+
+## 📖 配置参考
+
+### 支持的Llama模型
+- `meta-llama/Llama-3.3-70B-Instruct`
+- `meta-llama/Llama-3.1-8B-Instruct`
+- `meta-llama/Llama-3.1-70B-Instruct`
+- `meta-llama/Llama-2-7b-chat-hf`
+- `meta-llama/Llama-2-13b-chat-hf`
+
+### 支持的Whisper模型
+- `openai/whisper-large-v3`
+- `openai/whisper-large-v2`
+- `openai/whisper-medium`
+- `openai/whisper-small`
+
+## 🤝 贡献
+
+欢迎提交Issue和Pull Request！
+
+## 📄 许可证
+
+本项目采用MIT许可证。
+
+## 🙏 致谢
+
+- 感谢Qwen2-Audio论文提供的架构设计思路
+- 感谢Hugging Face Transformers库
+- 感谢Microsoft DeepSpeed团队
+- 感谢OpenAI Whisper项目
+
+## 📞 联系方式
+
+如有问题或建议，请通过以下方式联系：
+- 提交GitHub Issue
+- 发送邮件至：[your-email@example.com]
 
 ---
 
-Happy training! 🎵🤖
+**注意**: 本框架需要足够的计算资源来训练大型模型。建议在开始训练前仔细评估硬件需求。 

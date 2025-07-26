@@ -2,4 +2,7 @@
 dataset/data/*
 *.log
 *.pyc
+scripts/data_download/data/*
+scripts/data_download/downloads/*
 outputs/*
+.DS_Store

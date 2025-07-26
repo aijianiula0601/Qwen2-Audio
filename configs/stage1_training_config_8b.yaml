@@ -1,0 +1,117 @@
+# Stage 1: Audio-Text Alignment Pre-training Configuration (8B Model)
+# This configuration uses Llama-3.1-8B model with balanced memory optimizations
+
+# Model Configuration
+model:
+  llama_model_name: "meta-llama/Llama-3.1-8B"  # 8B model - good balance of capability and memory
+  whisper_model_name: "openai/whisper-base"  # Use smaller Whisper model to save memory
+  freeze_llm: true  # Stage 1: Only train audio components
+  freeze_audio_encoder: false  # Train audio encoder
+  use_lora: false  # Not needed for Stage 1 since LLM is frozen
+  lora_rank: 64
+  lora_alpha: 16
+  lora_dropout: 0.1
+  use_cross_attention: false  # Keep it simple for Stage 1
+  max_audio_tokens: 512  # Reduced from 1024 for memory efficiency
+  audio_adapter_hidden_size: 1024  # Reduced from 2048
+  use_conv_adapter: true
+
+# Stage 1 Specific Training Configuration
+training:
+  # Data paths
+  train_data_path: "data/stage1_alignment/train.jsonl"
+  val_data_path: "data/stage1_alignment/val.jsonl"
+  
+  # Training parameters - Optimized for 8B model with aggressive memory efficiency
+  num_epochs: 5  # Stage 1 doesn't need many epochs
+  batch_size: 1  # Reduced to match micro_batch_size_per_gpu
+  eval_batch_size: 1  # Reduced eval batch size
+  learning_rate: 5e-4  # Higher LR since only training audio components
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  
+  # Audio and text limits - Aggressively reduced for memory efficiency
+  max_text_length: 128  # Reduced from 256 for memory efficiency
+  max_audio_length: 10.0  # Reduced from 20 seconds to 10 seconds
+  
+  # Optimization
+  optimizer_type: "adamw"
+  scheduler_type: "cosine_with_warmup"
+  gradient_accumulation_steps: 8  # Increased to match DeepSpeed config
+  max_grad_norm: 1.0
+  
+  # Logging and checkpointing
+  log_interval: 50
+  save_interval: 1000
+  eval_interval: 500
+  early_stopping_patience: 3
+  
+  # System - Minimal workers for memory efficiency
+  num_workers: 2  # Reduced from 4 for memory efficiency
+  seed: 42
+  
+  # Mixed precision
+  fp16: true
+  bf16: false
+
+# DeepSpeed Configuration for Stage 1
+deepspeed:
+  enabled: true
+  config_path: "configs/deepspeed_config_8b.json"
+  zero_stage: 3  # Stage 2 sufficient for 8B with some optimizations
+
+# Output Configuration
+output:
+  output_dir: "outputs/stage1_alignment_8b"
+  experiment_name: "llama_audio_stage1_8b"
+  save_total_limit: 3
+  
+# Distributed Training
+distributed:
+  backend: "nccl"
+  find_unused_parameters: false
+
+# Evaluation Configuration
+evaluation:
+  eval_strategy: "steps"
+  eval_steps: 500
+  save_strategy: "steps"
+  save_steps: 1000
+  metric_for_best_model: "eval_loss"
+  greater_is_better: false
+  load_best_model_at_end: true
+
+# Data Configuration
+data:
+  audio_format: "whisper"
+  sample_rate: 16000
+  include_audio_tokens: true
+  instruction_templates:
+    - "转录这段音频：<audio>"
+    - "请将音频转换为文字：<audio>"
+    - "听写音频内容：<audio>"
+    - "<audio> 这段音频说的是什么？"
+
+# Stage 1 Loss Configuration
+loss:
+  # Focus on alignment loss (CTC + CE)
+  ctc_weight: 0.3
+  ce_weight: 0.7
+  label_smoothing: 0.1
+
+# Resume Training
+resume:
+  resume_from_checkpoint: null
+  auto_find_batch_size: false
+
+# Stage 1 Notes
+stage_info:
+  stage: 1
+  objective: "Audio-text alignment through speech recognition"
+  frozen_components: ["llm"]
+  trainable_components: ["audio_encoder", "multimodal_connector"]
+  expected_metrics:
+    - "Transcription accuracy"
+    - "Audio-text alignment quality"
+  next_stage: "stage2_understanding"
+  model_notes: "Using Llama-3.1-8B model - good balance of capability and memory efficiency" 

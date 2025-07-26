@@ -1,0 +1,99 @@
+# LlamaAudio Training Configuration
+
+# Model Configuration
+model:
+  llama_model_name: "meta-llama/Llama-3.3-70B-Instruct"
+  whisper_model_name: "openai/whisper-large-v3"
+  freeze_llm: false
+  freeze_audio_encoder: true
+  use_lora: true
+  lora_rank: 64
+  lora_alpha: 16
+  lora_dropout: 0.1
+  use_cross_attention: false
+  max_audio_tokens: 2048
+  audio_adapter_hidden_size: 2048
+  use_conv_adapter: true
+
+# Training Configuration
+training:
+  # Data
+  train_data_path: "data/train.jsonl"
+  val_data_path: "data/val.jsonl"
+  
+  # Training parameters
+  num_epochs: 3
+  batch_size: 8
+  eval_batch_size: 4
+  learning_rate: 2e-5
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  
+  # Text and audio limits
+  max_text_length: 512
+  max_audio_length: 30.0  # seconds
+  
+  # Optimization
+  optimizer_type: "adamw"
+  scheduler_type: "cosine_with_warmup"
+  gradient_accumulation_steps: 4
+  max_grad_norm: 1.0
+  
+  # Logging and checkpointing
+  log_interval: 100
+  save_interval: 1000
+  eval_interval: 500
+  early_stopping_patience: 5
+  
+  # System
+  num_workers: 4
+  seed: 42
+  
+  # Mixed precision
+  fp16: true
+  bf16: false
+
+# DeepSpeed Configuration
+deepspeed:
+  enabled: true
+  config_path: "configs/deepspeed_config.json"
+  zero_stage: 2
+
+# Output Configuration
+output:
+  output_dir: "outputs/llama_audio_training"
+  experiment_name: "llama_audio_v1"
+  save_total_limit: 3
+  
+# Distributed Training
+distributed:
+  backend: "nccl"
+  find_unused_parameters: false
+
+# Evaluation Configuration
+evaluation:
+  eval_strategy: "steps"
+  eval_steps: 500
+  save_strategy: "steps"
+  save_steps: 1000
+  metric_for_best_model: "eval_loss"
+  greater_is_better: false
+  load_best_model_at_end: true
+
+# Data Configuration
+data:
+  audio_format: "whisper"  # "whisper" or "raw"
+  sample_rate: 16000
+  include_audio_tokens: true
+  instruction_templates:
+    - "Listen to the audio and respond: <audio>"
+    - "What do you hear in this audio? <audio>"
+    - "Describe the audio: <audio>"
+    - "Answer based on the audio: <audio>"
+    - "<audio> What is this?"
+    - "<audio> Please describe what you hear."
+
+# Resume Training
+resume:
+  resume_from_checkpoint: null  # Path to checkpoint to resume from
+  auto_find_batch_size: false 

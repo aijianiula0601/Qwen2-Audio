@@ -1,0 +1,117 @@
+# Stage 1: Audio-Text Alignment Pre-training Configuration (3B Model)
+# This configuration uses a smaller model for memory-constrained environments
+
+# Model Configuration
+model:
+  llama_model_name: "meta-llama/Llama-3.2-3B-Instruct"  # Much smaller model
+  whisper_model_name: "openai/whisper-large-v3"
+  freeze_llm: true  # Stage 1: Only train audio components
+  freeze_audio_encoder: false  # Train audio encoder
+  use_lora: false  # Not needed for Stage 1 since LLM is frozen
+  lora_rank: 64
+  lora_alpha: 16
+  lora_dropout: 0.1
+  use_cross_attention: false  # Keep it simple for Stage 1
+  max_audio_tokens: 1024  # Smaller for alignment training
+  audio_adapter_hidden_size: 2048
+  use_conv_adapter: true
+
+# Stage 1 Specific Training Configuration
+training:
+  # Data paths
+  train_data_path: "data/stage1_alignment/train.jsonl"
+  val_data_path: "data/stage1_alignment/val.jsonl"
+  
+  # Training parameters - Optimized for smaller model
+  num_epochs: 5  # Stage 1 doesn't need many epochs
+  batch_size: 16  # Can use larger batch with smaller model
+  eval_batch_size: 8
+  learning_rate: 5e-4  # Higher LR since only training audio components
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  
+  # Audio and text limits
+  max_text_length: 256  # Shorter for transcription
+  max_audio_length: 20.0  # 20 seconds max
+  
+  # Optimization
+  optimizer_type: "adamw"
+  scheduler_type: "cosine_with_warmup"
+  gradient_accumulation_steps: 2  # Smaller accumulation for smaller model
+  max_grad_norm: 1.0
+  
+  # Logging and checkpointing
+  log_interval: 50
+  save_interval: 1000
+  eval_interval: 500
+  early_stopping_patience: 3
+  
+  # System
+  num_workers: 8  # Can use more workers with smaller model
+  seed: 42
+  
+  # Mixed precision
+  fp16: true
+  bf16: false
+
+# DeepSpeed Configuration for Stage 1
+deepspeed:
+  enabled: true
+  config_path: "configs/deepspeed_config_3b.json"
+  zero_stage: 2  # Stage 2 is sufficient for 3B model
+
+# Output Configuration
+output:
+  output_dir: "outputs/stage1_alignment_3b"
+  experiment_name: "llama_audio_stage1_3b"
+  save_total_limit: 3
+  
+# Distributed Training
+distributed:
+  backend: "nccl"
+  find_unused_parameters: false
+
+# Evaluation Configuration
+evaluation:
+  eval_strategy: "steps"
+  eval_steps: 500
+  save_strategy: "steps"
+  save_steps: 1000
+  metric_for_best_model: "eval_loss"
+  greater_is_better: false
+  load_best_model_at_end: true
+
+# Data Configuration
+data:
+  audio_format: "whisper"
+  sample_rate: 16000
+  include_audio_tokens: true
+  instruction_templates:
+    - "转录这段音频：<audio>"
+    - "请将音频转换为文字：<audio>"
+    - "听写音频内容：<audio>"
+    - "<audio> 这段音频说的是什么？"
+
+# Stage 1 Loss Configuration
+loss:
+  # Focus on alignment loss (CTC + CE)
+  ctc_weight: 0.3
+  ce_weight: 0.7
+  label_smoothing: 0.1
+
+# Resume Training
+resume:
+  resume_from_checkpoint: null
+  auto_find_batch_size: false
+
+# Stage 1 Notes
+stage_info:
+  stage: 1
+  objective: "Audio-text alignment through speech recognition"
+  frozen_components: ["llm"]
+  trainable_components: ["audio_encoder", "multimodal_connector"]
+  expected_metrics:
+    - "Transcription accuracy"
+    - "Audio-text alignment quality"
+  next_stage: "stage2_understanding"
+  model_notes: "Using 3B model for memory efficiency - suitable for testing and development" 

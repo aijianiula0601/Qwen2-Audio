@@ -1,0 +1,5 @@
+{"audio_path": "examples/audio/speech_sample.wav", "instruction": "请转录这段音频中的语音内容。", "output": "这是一段测试音频，包含清晰的英语语音。", "task": "speech_recognition"}
+{"audio_path": "examples/audio/music_sample.wav", "instruction": "请描述这段音频的内容。", "output": "这是一段优美的钢琴音乐，旋律舒缓，适合放松时聆听。", "task": "audio_description"}
+{"audio_path": "examples/audio/environment_sample.wav", "instruction": "这段音频中包含什么声音？", "output": "音频中包含鸟叫声和轻微的风声，像是在公园或自然环境中录制的。", "task": "audio_classification"}
+{"audio_path": "examples/audio/conversation_sample.wav", "instruction": "分析这段音频的对话内容。", "output": "这是两个人之间的友好对话，讨论天气和周末计划。", "task": "conversation_analysis"}
+{"audio_path": "examples/audio/music_emotion.wav", "instruction": "这段音乐给你什么感受？", "output": "这段音乐传达出平静和安详的情感，节奏缓慢，音调柔和。", "task": "emotion_analysis"} 

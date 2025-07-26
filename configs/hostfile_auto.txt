@@ -1,3 +1,0 @@
-v100_f178 slots=8
-v100_f165 slots=8
-v100 slots=8

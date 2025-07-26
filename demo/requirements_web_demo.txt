@@ -1,2 +1,0 @@
-gradio==4.31.3
-modelscope-studio

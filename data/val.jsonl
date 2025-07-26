@@ -1,0 +1,10 @@
+{"audio_path": "audio/sample_000090.wav", "conversation": [{"role": "user", "content": "请告诉我这段音频里有什么？"}, {"role": "assistant", "content": "这段音频包含了悠扬的音乐声，听起来像是古典音乐作品。"}]}
+{"audio_path": "audio/sample_000091.wav", "instruction": "这段音频是什么类型的？", "output": "这属于环境音效类型。"}
+{"audio_path": "audio/sample_000092.wav", "instruction": "分析音频中的情感色彩", "output": "这段音频给人带来忧郁和沉思的感觉。"}
+{"audio_path": "audio/sample_000093.wav", "conversation": [{"role": "user", "content": "请告诉我这段音频里有什么？"}, {"role": "assistant", "content": "这段音频包含了悠扬的音乐声，听起来像是古典音乐作品。"}]}
+{"audio_path": "audio/sample_000094.wav", "instruction": "这段音频是什么类型的？", "output": "这是自然声音类型的音频。"}
+{"audio_path": "audio/sample_000095.wav", "instruction": "分析音频中的情感色彩", "output": "这段音频传达出平静和宁静的情感。"}
+{"audio_path": "audio/sample_000096.wav", "conversation": [{"role": "user", "content": "请告诉我这段音频里有什么？"}, {"role": "assistant", "content": "这段音频包含了悠扬的音乐声，听起来像是古典音乐作品。"}]}
+{"audio_path": "audio/sample_000097.wav", "instruction": "这段音频是什么类型的？", "output": "这是语音通话类型的音频。"}
+{"audio_path": "audio/sample_000098.wav", "instruction": "分析音频中的情感色彩", "output": "音频表现出紧张和刺激的情绪。"}
+{"audio_path": "audio/sample_000099.wav", "conversation": [{"role": "user", "content": "请告诉我这段音频里有什么？"}, {"role": "assistant", "content": "这段音频包含了悠扬的音乐声，听起来像是古典音乐作品。"}]}

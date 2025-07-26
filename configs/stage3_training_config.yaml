@@ -1,0 +1,160 @@
+# Stage 3: Instruction Following & Conversation Training Configuration
+
+# Model Configuration
+model:
+  llama_model_name: "meta-llama/Llama-3.3-70B-Instruct"
+  whisper_model_name: "openai/whisper-large-v3"
+  freeze_llm: false  # Stage 3: Full fine-tuning with LoRA
+  freeze_audio_encoder: true  # Keep audio encoder frozen
+  use_lora: true  # Continue using LoRA for LLM
+  lora_rank: 64
+  lora_alpha: 16
+  lora_dropout: 0.05  # Lower dropout for final stage
+  use_cross_attention: true  # Full multimodal capabilities
+  max_audio_tokens: 2048
+  audio_adapter_hidden_size: 2048
+  use_conv_adapter: true
+
+# Stage 3 Specific Training Configuration
+training:
+  # Data paths
+  train_data_path: "data/stage3_conversation/train.jsonl"
+  val_data_path: "data/stage3_conversation/val.jsonl"
+  
+  # Training parameters
+  num_epochs: 2  # Final fine-tuning stage
+  batch_size: 4  # Smaller batch for complex conversations
+  eval_batch_size: 2
+  learning_rate: 1e-5  # Very low LR for final fine-tuning
+  weight_decay: 0.01
+  warmup_ratio: 0.05  # Shorter warmup
+  
+  # Audio and text limits
+  max_text_length: 1024  # Longer for conversations
+  max_audio_length: 30.0  # Keep 30 seconds
+  
+  # Optimization
+  optimizer_type: "adamw"
+  scheduler_type: "cosine_with_warmup"
+  gradient_accumulation_steps: 8  # Large accumulation for small batches
+  max_grad_norm: 0.5  # Lower gradient clipping
+  
+  # Logging and checkpointing
+  log_interval: 50
+  save_interval: 500
+  eval_interval: 250
+  early_stopping_patience: 3
+  
+  # System
+  num_workers: 4
+  seed: 42
+  
+  # Mixed precision
+  fp16: true
+  bf16: false
+
+# DeepSpeed Configuration for Stage 3
+deepspeed:
+  enabled: true
+  config_path: "configs/deepspeed_stage3_config.json"
+  zero_stage: 3  # Use ZeRO-3 for final stage
+
+# Output Configuration
+output:
+  output_dir: "outputs/stage3_conversation"
+  experiment_name: "llama_audio_stage3"
+  save_total_limit: 5  # Keep more checkpoints for final stage
+  
+# Distributed Training
+distributed:
+  backend: "nccl"
+  find_unused_parameters: false
+
+# Evaluation Configuration
+evaluation:
+  eval_strategy: "steps"
+  eval_steps: 250
+  save_strategy: "steps"
+  save_steps: 500
+  metric_for_best_model: "eval_loss"
+  greater_is_better: false
+  load_best_model_at_end: true
+
+# Data Configuration
+data:
+  audio_format: "whisper"
+  sample_rate: 16000
+  include_audio_tokens: true
+  instruction_templates:
+    - "根据音频回答问题：<audio>"
+    - "听这段音频并按要求回应：<audio>"
+    - "音频内容：<audio> 请按指示操作。"
+    - "参考音频信息：<audio>"
+    - "<audio> 请根据音频内容回答。"
+    - "<audio> 听完这段音频，请回应。"
+
+# Stage 3 Loss Configuration
+loss:
+  # Focus on conversation and instruction following
+  generation_weight: 1.0
+  instruction_following_weight: 1.2  # Emphasize instruction following
+  label_smoothing: 0.05  # Lower label smoothing
+
+# Model Loading
+model_loading:
+  # Load from Stage 2 checkpoint
+  load_from_stage2: "outputs/stage2_understanding/final_model"
+  load_audio_encoder_from: "outputs/stage1_alignment/final_model"
+  load_connector_from: "outputs/stage2_understanding/final_model"
+  load_lora_from: "outputs/stage2_understanding/final_model"
+
+# Advanced Training Techniques
+advanced:
+  # DPO (Direct Preference Optimization) settings
+  use_dpo: false  # Can be enabled for preference learning
+  dpo_beta: 0.1
+  
+  # Curriculum learning
+  curriculum_learning: true
+  start_with_simple_instructions: true
+  gradually_increase_complexity: true
+  
+  # Multi-task learning weights
+  task_weights:
+    instruction_following: 1.0
+    multi_turn_conversation: 1.0
+    audio_description: 0.8
+    audio_qa: 1.2
+
+# Resume Training
+resume:
+  resume_from_checkpoint: null
+  auto_find_batch_size: false
+
+# Stage 3 Notes
+stage_info:
+  stage: 3
+  objective: "Instruction following and multi-turn conversation"
+  frozen_components: ["audio_encoder"]
+  trainable_components: ["multimodal_connector", "llm_with_lora"]
+  expected_metrics:
+    - "Instruction following accuracy"
+    - "Conversation coherence"
+    - "Response relevance"
+    - "Multi-turn consistency"
+  prerequisite: "Complete Stage 1 and Stage 2 training first"
+  final_stage: true
+
+# Special Training Settings for Stage 3
+conversation:
+  max_turns: 10  # Maximum conversation turns
+  context_window: 4096  # Extended context for conversations
+  response_length_penalty: 0.1  # Encourage concise responses
+  repetition_penalty: 1.1  # Avoid repetitive responses
+  
+  # Conversation evaluation metrics
+  eval_metrics:
+    - "response_relevance"
+    - "conversation_flow"
+    - "instruction_adherence"
+    - "factual_accuracy" 
